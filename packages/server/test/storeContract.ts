@@ -3,6 +3,7 @@ import {
   achievementsOf,
   NO_CREDITS,
   type Difficulty,
+  type RunBoard,
   type RunOutcome,
   type RunReport,
 } from '@escapelab/core';
@@ -142,11 +143,11 @@ async function accountOfPass(store: Store, name: string): Promise<string | null>
   return (await store.findByIdentity(identityOf(name)))?.id ?? null;
 }
 
-/** A ranking that keeps the runs of `mission` off the boards, as an older chain's are kept. */
-const without =
-  (mission: string): Ranking =>
+/** A ranking that puts the runs of `mission` on `board`, and every other run on the live one. */
+const putting =
+  (mission: string, board: RunBoard): Ranking =>
   (run) =>
-    run.missionId !== mission;
+    run.missionId === mission ? board : 'live';
 
 /**
  * Runs the contract against the store `open` opens, under `name` — its Bestenliste ranking
@@ -199,7 +200,7 @@ export function storeContract(name: string, open: (ranked?: Ranking) => Promise<
 
   describe(`${name}: runs the ranking leaves out`, () => {
     it('keeps them whole and in their crew’s runs, on no board, now and when opened anew', async () => {
-      const { store, reopen } = await open(without('blackout'));
+      const { store, reopen } = await open(putting('blackout', 'none'));
       await withAccounts(store, ['Anna', 'Ben']);
       const old = finished({ at: DAY, seconds: 300 }, ['Anna', 'Ben']);
       const ranked = finished({ mission: 'systemcheck', at: DAY + 1 }, ['Anna', 'Ben']);
@@ -218,6 +219,34 @@ export function storeContract(name: string, open: (ranked?: Ranking) => Promise<
       const anna = (await store.findByIdentity(identityOf('Anna')))?.id ?? '';
       const hers = await store.runsOfAccount(anna, 10);
       expect(hers.runs.map(({ run }) => run.missionId)).toEqual(['systemcheck', 'blackout']);
+    });
+  });
+
+  describe(`${name}: runs of an earlier chain`, () => {
+    it('ranks them on their mission’s archive alone, now and when opened anew', async () => {
+      const { store, reopen } = await open(putting('blackout', 'archive'));
+      await withAccounts(store, ['Anna', 'Ben', 'Cleo']);
+      await store.appendRun(finished({ at: DAY, seconds: 300 }, ['Anna', 'Ben']));
+      await store.appendRun(finished({ at: DAY + 1, seconds: 280, crew: ['Cleo'] }, ['Cleo']));
+      await store.appendRun(finished({ mission: 'systemcheck', at: DAY + 2 }, ['Anna', 'Ben']));
+      for (const each of [store, await reopen()]) {
+        const stats = each.stats();
+        expect([stats.runs, stats.archived, stats.unranked]).toEqual([3, 2, 0]);
+        const blackout = stats.mission('blackout');
+        expect(blackout?.difficulties).toEqual([]);
+        expect(blackout?.archive).toMatchObject([{ difficulty: 'normal', runs: 2, wins: 2 }]);
+        expect(blackout?.archive?.[0]?.top.map((entry) => entry.crew)).toEqual([
+          ['Cleo'],
+          ['Anna', 'Ben'],
+        ]);
+        expect(stats.placeOf('blackout', DAY)).toBeNull();
+        expect(stats.mission('systemcheck')).not.toHaveProperty('archive');
+      }
+      // A deleted account's name leaves the archive as it leaves the live board.
+      const cleo = (await store.findByIdentity(identityOf('Cleo')))?.id ?? '';
+      await store.deleteAccount(cleo);
+      const top = store.stats().mission('blackout')?.archive?.[0]?.top;
+      expect(top?.map((entry) => entry.crew)).toEqual([[], ['Anna', 'Ben']]);
     });
   });
 

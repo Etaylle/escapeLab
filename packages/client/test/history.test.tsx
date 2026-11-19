@@ -9,7 +9,7 @@ import type {
   MissionStats,
 } from '@escapelab/core';
 import { clock, recordLine, recordParts, winShare } from '../src/runStats.js';
-import { HistoryBoard, HistoryScreen, scrollToShow } from '../src/screens/History.js';
+import { DailyDays, HistoryBoard, HistoryScreen, scrollToShow } from '../src/screens/History.js';
 import { JoinScreen } from '../src/screens/Join.js';
 import { MissionPanel } from '../src/screens/MenuPanels.js';
 import { Standing, type FinishedRun } from '../src/screens/Standing.js';
@@ -359,6 +359,98 @@ describe('the Bestenliste page', () => {
   });
 });
 
+describe('the board of an earlier chain, „Frühere Anlage"', () => {
+  /** Blackout rebuilt: one crew on its live board, two of the chain before on its archive. */
+  const archive = [
+    level({
+      runs: 3,
+      wins: 2,
+      bestSeconds: 300,
+      medianSeconds: 300,
+      top: [entry(['Alt', 'Älter'], 300, 0, DAY - 9_000), entry([], 330, 1, DAY - 8_000)],
+    }),
+  ];
+  const rebuilt: MissionStats[] = [
+    {
+      missionId: 'blackout',
+      difficulties: [level({ runs: 1, wins: 1, bestSeconds: 540, top: [entry(['Neu'], 540)] })],
+      archive,
+    },
+    { missionId: 'systemcheck', difficulties: [normal] },
+  ];
+
+  function board(missionId: string, difficulty: DifficultyStats['difficulty'] = 'normal'): string {
+    return renderToStaticMarkup(
+      <HistoryBoard
+        missions={[blackout, tutorial]}
+        stats={rebuilt}
+        missionId={missionId}
+        selectMission={noop}
+        difficulty={difficulty}
+        selectDifficulty={noop}
+      />,
+    );
+  }
+
+  it('stands under the live board, named, with its line and its own crews and totals', () => {
+    const html = board('blackout');
+    const [live, old] = html.split('<section class="history-board history-archive">');
+    expect(live).toContain('<h2>Blackout im Labor · Normal</h2>');
+    expect(live).toContain('Neu');
+    expect(live).not.toContain('Alt, Älter');
+    expect(old).toContain('<h2>Frühere Anlage · Normal</h2>');
+    expect(old).toContain(
+      '<p class="history-archive-note">Das Labor wurde umgebaut. ' +
+        'Diese Zeiten liefen noch auf der früheren Anlage.</p>',
+    );
+    expect(old).toContain('<div><dt>Beste Zeit</dt><dd>5:00</dd></div>');
+    const crew = /leader-(?:crew|nameless)">([^<]+)/;
+    const crews = rowsOf(old ?? '').map((row) => crew.exec(row)?.[1]);
+    expect(crews).toEqual(['Alt, Älter', 'ohne Namen (2)']);
+    expect(old).not.toContain('Neu');
+  });
+
+  it('says so where nobody ran the earlier chain at that difficulty', () => {
+    expect(board('blackout', 'hart')).toContain(
+      'Auf dieser Stufe ist auf der früheren Anlage niemand gelaufen.',
+    );
+  });
+
+  it('shows nothing new on a mission without runs of an earlier chain', () => {
+    const html = board('systemcheck');
+    expect(html).not.toContain('history-archive');
+    expect(html).not.toContain('Frühere Anlage');
+  });
+
+  it('stands on a day of the Tagesschicht too; alone on a day with nothing else', () => {
+    const days = [
+      { day: '2026-11-18', missions: rebuilt },
+      { day: '2026-11-15', missions: [{ missionId: 'blackout', difficulties: [], archive }] },
+    ];
+    const missions = [blackout, tutorial];
+    const both = renderToStaticMarkup(
+      <DailyDays days={days} missions={missions} difficulty="normal" />,
+    );
+    expect(both).toContain('<h2>Blackout im Labor · Tagesschicht 18.11. · Normal</h2>');
+    expect(both).toContain(
+      '<h2>Blackout im Labor · Tagesschicht 18.11. · Frühere Anlage · Normal</h2>',
+    );
+    expect(both).toContain('<h2>Tutorial: Systemcheck · Tagesschicht 18.11. · Normal</h2>');
+    expect(both.match(/history-archive"/g)).toHaveLength(1);
+    const before = renderToStaticMarkup(
+      <DailyDays days={days.slice(1)} missions={missions} difficulty="normal" />,
+    );
+    expect(before).not.toContain('<h2>Blackout im Labor · Tagesschicht 15.11. · Normal</h2>');
+    expect(before).toContain(
+      '<h2>Blackout im Labor · Tagesschicht 15.11. · Frühere Anlage · Normal</h2>',
+    );
+  });
+
+  it('draws no emoji', () => {
+    expect(board('blackout')).not.toMatch(PICTOGRAPH);
+  });
+});
+
 describe('the stylesheet', () => {
   const css = readFileSync(new URL('../src/styles/history.css', import.meta.url), 'utf8');
 
@@ -366,6 +458,12 @@ describe('the stylesheet', () => {
     // A row that wrapped grew the page past a 1280 × 720 window (the walkthrough's `scrolls`).
     expect(css).toMatch(/\.history-tabs \{[^}]*flex-wrap: nowrap;[^}]*overflow-x: auto;/);
     expect(css).toMatch(/\.history-tab \{\s*flex: none;\s*white-space: nowrap;/);
+  });
+
+  it('sets the archive’s line at 14 px at least, and apart from the live board above it', () => {
+    expect(css).toMatch(/\.history-archive \{[^}]*border-top: 3px double/);
+    const size = /\.history-archive-note \{[^}]*font-size: (\d+)px;/.exec(css)?.[1];
+    expect(Number(size)).toBeGreaterThanOrEqual(14);
   });
 
   it('sets a card with its record to four lines that fit its 64px map: 18 + 3 × 15', () => {

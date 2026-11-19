@@ -33,10 +33,22 @@ export interface DifficultyStats {
   top: LeaderEntry[];
 }
 
-/** One mission: the difficulties it has been played at, easiest first. */
+/**
+ * Which board a run stands on: its mission's live one; the archive of the mission's earlier
+ * chain of stations, „Frühere Anlage", for a run from before the mission got a Wechselplatz; or
+ * none, for a run of a chain that is neither. A run on no live board is kept all the same.
+ */
+export type RunBoard = 'live' | 'archive' | 'none';
+
+/**
+ * One mission: the difficulties it has been played at, easiest first — on its live board, and
+ * on the archive of its earlier chain where runs of that chain are kept.
+ */
 export interface MissionStats {
   missionId: string;
   difficulties: DifficultyStats[];
+  /** the earlier chain's board, ranked by the same rules; left out where the mission has none */
+  archive?: DifficultyStats[];
 }
 
 /** Where a won run stands among every run of its mission at its difficulty. */

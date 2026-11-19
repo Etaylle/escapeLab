@@ -1,8 +1,9 @@
 import { Fragment, useEffect } from 'react';
-import { dailyLabel, type AccountRun, type MissionInfo } from '@escapelab/core';
+import { dailyLabel, type AccountRun, type MissionInfo, type RunBoard } from '@escapelab/core';
 import { clock, dateText, difficultyLabel, type Loaded } from '../runStats.js';
 import type { MyRuns } from '../ws.js';
 import { ENDING_TITLES } from './End.js';
+import { ARCHIVE_NAME } from './History.js';
 
 /**
  * „Meine Einsätze", a page of its own off the menu as the Bestenliste is: the runs the pass's
@@ -27,11 +28,24 @@ export function outcomeText(outcome: AccountRun['outcome']): string {
   return `${title.charAt(0)}${title.slice(1).toLowerCase()}`;
 }
 
-/** The row's mission: its title, the difficulty, and the Tagesschicht's day where it was one. */
+/**
+ * Where a run stands apart from its mission's Bestenliste, as its row says it: on the board of
+ * the earlier chain, under the board's own name, or on none.
+ */
+const APART: Record<RunBoard, string> = {
+  live: '',
+  archive: ` · ${ARCHIVE_NAME}`,
+  none: ' · Außer Wertung',
+};
+
+/**
+ * The row's mission: its title, the difficulty, the Tagesschicht's day where it was one, and
+ * the board it stands on where that is not the live one.
+ */
 function missionCell(run: AccountRun, missions: MissionInfo[]): { title: string; how: string } {
   const title = missions.find((mission) => mission.id === run.missionId)?.title ?? run.missionId;
   const shift = run.daily === null ? '' : ` · Tagesschicht ${dailyLabel(run.daily)}`;
-  return { title, how: `${difficultyLabel(run.difficulty)}${shift}` };
+  return { title, how: `${difficultyLabel(run.difficulty)}${shift}${APART[run.board]}` };
 }
 
 /**

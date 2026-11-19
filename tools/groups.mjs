@@ -186,6 +186,7 @@ export const GROUPS = [
       'menu-hero-click.png',
       'menu-shutter.png',
       'history.png',
+      'history-archive.png',
       'menu-missions.png',
       'menu-hero-missions.png',
       'menu-to-lobby.png',

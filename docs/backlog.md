@@ -834,8 +834,24 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Quelle der eben gelösten Station steht, wird von keiner Drohne erfasst. Drei Notizen der letzten Schicht erklären den Dienstplan. Seeds: 12
   Signalkette (Rundgang, Smoke), 56 Funkpult, 93 Notstromkasten.
 - Bestenliste (B-blackout2): Auf einer Mission mit Wechselplatz zählt ein Lauf nur, wenn sein
-  Bericht die Auslosung nennt; ältere Läufe bleiben gespeichert und in „Meine Einsätze", stehen
-  aber auf keiner Tafel (`server/src/runStats.ts`).
+  Bericht die Auslosung nennt; ältere Läufe bleiben gespeichert und in „Meine Einsätze".
+- Frühere Anlage (S-archive, Entscheidung Uros 2026-11-19: die alte Bestzeit einer Crew darf
+  nicht verschwinden): Läufe ohne Auslosung stehen auf einer eigenen Tafel „Frühere Anlage"
+  unter der laufenden, nach denselben Regeln, auch je Tag der Tagesschicht; „Meine Einsätze"
+  markiert sie so. Eine Regel (`boardOf`): laufende Tafel, Archiv oder keine. Nichts migriert
+  oder gelöscht.
+- Kettennummer (offen, mit dem nächsten Umbau einer ausgelieferten Kette; Lead 2026-11-19):
+  `boardOf` trennt nur die Kette ohne Wechselplatz von der heutigen. Bei einem weiteren Umbau
+  wird die Regel blind: Bleiben die Stationen des Pools, landen die Läufe der neuen Kette mit
+  den heutigen auf der laufenden Tafel; ändern sie sich, stehen die heutigen Läufe auf keiner
+  Tafel („Außer Wertung"). Kleinster Schritt: eine ganze Zahl `chain` in der Mission, in den
+  Bericht übernommen; ein Lauf, dessen Kette nicht die der Mission ist, kommt aufs Archiv, je
+  Kette eine Tafel. Ohne Migration: Ein fehlendes `chain` gilt als 1 (Blackout ohne Pool), die
+  heutige Blackout-Datei sagt 2, und die Läufe mit Auslosung ohne Nummer sind die der Kette 2.
+- Markierung in „Meine Einsätze" (offen, kosmetisch; Review S-archive 2026-11-19): Sie folgt der
+  Rangregel von jetzt (`accounts.ts`, `stats.boardOf`), die Tafeln der beim Zählen. Wird eine
+  eigene Mission zur Laufzeit mit Wechselplatz neu gespeichert, kann ein Lauf bis zum Neustart
+  „Frühere Anlage" heißen und doch auf der laufenden Tafel stehen (oder umgekehrt).
 - Nächstes Paket (Lead): Blackout mit dem Wechselplatz neu ketten — notlicht → Anlaufsteuerung
   → Paketfilter (öffnet das Serverschott) → Serverraum → Wechselplatz aus Signalkette, Funkfeuer
   und Notstromkasten (öffnet die Reaktortüren) → reaktorstart.
