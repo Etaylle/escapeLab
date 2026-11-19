@@ -49,7 +49,7 @@ function viewOf(startedAt: number, doorOpen = true): PlayerView {
     plates: [],
     decor: [],
   } as unknown as MapView;
-  const you = { id: 'a', name: 'Automat A' };
+  const you = { id: 'a', name: 'HCW Bachelor' };
   return { phase: 'playing', startedAt, you, map } as unknown as PlayerView;
 }
 
@@ -86,7 +86,7 @@ describe('a seat of the demo crew', () => {
     const { seat, sent } = seated(clock);
     seat.hear({ kind: 'view', view: viewOf(1000), at: 0 });
     expect(seat.at).toEqual({ x: 1.5, y: 3.5 });
-    expect([seat.id, seat.name]).toEqual(['a', 'Automat A']);
+    expect([seat.id, seat.name]).toEqual(['a', 'HCW Bachelor']);
     seat.stepTo({ x: 1.5, y: 3.9 }, true);
     expect(sent).toEqual([
       { kind: 'pos', run: 1000, x: 1.5, y: 3.9, facing: Math.PI / 2, moving: true, t: 5000 },
@@ -108,7 +108,7 @@ describe('a seat of the demo crew', () => {
     expect(seat.at).toEqual({ x: 1.5, y: 3.5 });
     expect(Object.keys(seat.drones)).toEqual(['wache']);
     seat.hear({ kind: 'error', message: 'Zu weit weg.', of: 'interact' });
-    expect(refused).toEqual(['Automat A: interact refused, Zu weit weg.']);
+    expect(refused).toEqual(['HCW Bachelor: interact refused, Zu weit weg.']);
     // The next run stands it on its spawn again, the last run's drones gone.
     seat.stepTo({ x: 4.5, y: 3.5 }, true);
     seat.hear({ kind: 'view', view: viewOf(2000), at: 0 });

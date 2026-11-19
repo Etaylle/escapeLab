@@ -1365,6 +1365,30 @@ button.link:hover {
   gap: 12px;
 }
 
+/* The demo room's label beside the mission's name: always there while the demo is watched. */
+.demo-label {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 2px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: calc(14px * var(--text-scale));
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* A phone's head has room for the label, not for the line as well. */
+@media (max-width: 560px), (orientation: landscape) and (max-height: 500px) {
+  .demo-line {
+    display: none;
+  }
+}
+
 /* The demo room's line under the mission's name: the plant plays by itself. */
 .demo-line {
   margin: 6px 0 0;

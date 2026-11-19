@@ -1331,12 +1331,23 @@ straight into the audience of the demo room: no name, no account, no code. The l
 the page comes up and taken off the address at once (`client/src/demoLink.ts`), so that no invite
 link copies it and a reload after „Zuschauen beenden" finds the menu. A phone held sideways has no
 room for the item in its menu's column, as it has none for „Einstellungen": there the link leads
-into the demo, and held upright the item stands. The audience is the one every room has, with one
-line under the mission's name — „Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst, an den
-Pulten stehen zwei Automaten." — and the crew along the foot as always: „Automat A" and „Automat
-B", each with what it is doing (am Pult A, liest, hält die Platte, trägt die Sicherung). Under a
-finger the foot's two ways, „Crew mithören" and „Zuschauen beenden", are 44 px tall. Whoever joins
-mid-run sees the run as it stands.
+into the demo, and held upright the item stands. The audience is the one every room has, with the
+label „Demo" beside the mission's name — on every window, a phone's too — and on a wide window one
+line under it, „Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst."; the crew stands along the
+foot as always: „HCW Bachelor" and „HCW Master" (Uros's names for the two), each with what it is
+doing (am Pult A, liest, hält die Platte, trägt die Sicherung). Under a finger the foot's two ways,
+„Crew mithören" and „Zuschauen beenden", are 44 px tall. Whoever joins mid-run sees the run as it
+stands.
+
+**It keeps its server awake, and comes back by itself.** A page that only watches sends nothing
+over HTTP — its socket carries everything — and a host that puts an instance to sleep counts
+requests (Render's free plan: 15 minutes without one). So the demo's audience asks `/health` every
+4 minutes for as long as it watches (`client/src/keepAwake.ts`), a request that fails left be.
+Where the server restarts or the line drops, the page's line comes back as every page's does —
+again after 1 s, 2 s, 4 s, at most 10 s apart (`line.ts`) — and asks for the demo room's audience
+again, with no reload: killed and started again under a watching page, the server had the page back
+in the audience 3.4 s after it was up (the walkthrough's demo drill does it in every Systemcheck
+run that owns its server).
 
 **The room** (`server/src/demo/host.ts`) has the code `DEMO` (core `DEMO_CODE`; no room a server
 opens has an O in its code) and is none of the manager's rooms: no list shows it, nobody joins it
@@ -1393,8 +1404,10 @@ time the three seeds of the draws (12, 56, 93) came to 410, 343 and 380 s, on fa
 343 and 379 s. A run is lost only by the clock or the alarm limit, which a crew that careful does
 not come near; a server that hangs for seconds may cost it a sighting.
 
-**What watching costs.** A whole run with sixty watching costs 0.7 s of one core on an M4: the
-game, the crew and every view serialised for each socket. One of the audience is sent some 0.5
-views a second of 12 kB and 7.5 position messages of 0.5 kB — 6 to 10 kB a second, about 4 MB a run
-— so sixty take about 0.5 MB a second out of the server: the line, not the processor, is what an
-audience costs.
+**What watching costs.** The server's process on an M4, measured over two and a half minutes each
+(2026-11-19): with nobody watching 45 MB and 0.05 % of a core — the demo room in its lobby runs no
+timer —, with three watching 58 MB and 0.8 %, with sixty 89 MB and 3.0 %, sending 654 kB a second
+in all. A small hosted instance's share of a slower core is a tenth of one: three watching are
+nothing to it, sixty are about what it has. One of the audience is sent some 0.5 views a second of
+12 kB and 7.5 position messages of 0.5 kB — 6 to 10 kB a second, about 4 MB a run — so sixty take
+about 0.5 MB a second out of the server: the line, not the processor, is what an audience costs.

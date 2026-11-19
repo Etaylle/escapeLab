@@ -112,11 +112,11 @@ describe('the demo room', () => {
     const socket = line.connect();
     socket.say({ kind: 'join-room', code: 'demo', name: 'Anna', pass: passFor('Anna') });
     expect(refusalOf(socket)).toBe(DEMO_WATCH_ONLY);
-    socket.say({ kind: 'join-room', code: DEMO_CODE, name: 'Automat A', pass: passFor('Anna') });
+    socket.say({ kind: 'join-room', code: DEMO_CODE, name: 'HCW Bachelor', pass: passFor('Anna') });
     expect(refusalOf(socket)).toBe(DEMO_WATCH_ONLY);
     socket.say({ kind: 'resume', code: DEMO_CODE, pass: passFor('Anna') });
     expect(refusalOf(socket)).toBe('Raum "DEMO" existiert nicht (mehr).');
-    expect(seenBy(watch(host)).players.map((p) => p.name)).toEqual(['Automat A', 'Automat B']);
+    expect(seenBy(watch(host)).players.map((p) => p.name)).toEqual(['HCW Bachelor', 'HCW Master']);
   });
 
   it('counts apart from the rooms in /health, which names no run on for it', () => {

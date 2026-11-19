@@ -222,7 +222,7 @@ describe('what the first of the audience sees', () => {
     const host = new DemoHost(mission, [DRAW_SEEDS.signalkette]);
     const watcher = watch(host);
     expect(seenBy(watcher).phase).toBe('lobby');
-    expect(seenBy(watcher).players.map((p) => p.name)).toEqual(['Automat A', 'Automat B']);
+    expect(seenBy(watcher).players.map((p) => p.name)).toEqual(['HCW Bachelor', 'HCW Master']);
     const opening = playUntil(watcher, (view) => view.phase === 'playing', 10);
     expect(opening.lights.out).toBe(false);
     const dark = playUntil(watcher, (view) => view.lights.out, 20);

@@ -1,6 +1,8 @@
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
+import { useEffect } from 'react';
 import { clockText, serverNow } from '../clock.js';
 import { useServerNow } from '../hooks.js';
+import { keepAwake } from '../keepAwake.js';
 import type { DeviceRun } from '../puzzles/Device.js';
 import { pressingWord } from '../puzzles/syncPress.js';
 import { reportLine } from '../radio.js';
@@ -35,13 +37,19 @@ interface Props {
   demo?: boolean;
 }
 
+/** The label in the head of the demo room's audience: what is watched here is the demo. */
+export const DEMO_LABEL = 'Demo';
+
 /**
- * The line over the demo room's audience, in the plant's words: nobody plays here, the plant
- * runs the mission by itself, and the two at the consoles are its machines.
+ * The line under the mission's name there, in the plant's words: nobody plays here, the plant
+ * runs the mission by itself. A wide window's alone: on a phone the label says it.
  */
-export const DEMO_LINE =
-  'Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst, ' +
-  'an den Pulten stehen zwei Automaten.';
+export const DEMO_LINE = 'Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst.';
+
+/** The demo room's audience keeps its server awake for as long as it watches (keepAwake.ts). */
+function useKeepAwake(demo: boolean): void {
+  useEffect(() => (demo ? keepAwake() : undefined), [demo]);
+}
 
 /** Run time of an event as mm:ss, the way a match log reads, from the run's clock's start. */
 function elapsed(startedAt: number | null, at: number): string {
@@ -201,7 +209,8 @@ function SpectateFoot({
 
 /**
  * The head over the audience's screen: the mission watched and its difficulty — over the demo
- * room, the line that the plant plays by itself (`DEMO_LINE`) — and the run's clock and count.
+ * room with its label beside the name (`DEMO_LABEL`) and the line that the plant plays by itself
+ * (`DEMO_LINE`) — and the run's clock and count.
  */
 function SpectateHead({ view, demo }: { view: SpectatorView; demo: boolean }) {
   // The mission's clock on the server's, standing still while the run is paused (clock.ts):
@@ -211,7 +220,10 @@ function SpectateHead({ view, demo }: { view: SpectatorView; demo: boolean }) {
     <div className="spectate-head">
       <div>
         <span className="kicker">ZUSCHAUERMODUS · {view.difficulty}</span>
-        <h1>{view.missionTitle}</h1>
+        <h1>
+          {view.missionTitle}
+          {demo && <span className="demo-label">{DEMO_LABEL}</span>}
+        </h1>
         {demo && <p className="demo-line">{DEMO_LINE}</p>}
       </div>
       <div className="spectate-stats">
@@ -239,6 +251,7 @@ export function SpectateScreen({
   leaveRoom,
   demo,
 }: Props) {
+  useKeepAwake(demo === true);
   // The audience sees the lights fail too, unless it came in after.
   const darkSince = useDarkSince(view.lights, view.startedAt);
 

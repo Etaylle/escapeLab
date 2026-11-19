@@ -1026,7 +1026,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Laptops etwas gestartet wird.
 - „Demo" im Hauptmenü (nach „Offene Runden") und der Link `/?demo=1` führen ohne Namen, Konto und
   Code ins Publikum des Vorführraums (Code `DEMO`), den der Server selbst spielt
-  (`server/src/demo/`): zwei Automaten an eigenen Leitungen, die nur sagen, was eine Seite sagt
+  (`server/src/demo/`): „HCW Bachelor" und „HCW Master" an eigenen Leitungen, die nur sagen, was eine Seite sagt
   (`pos`, `interact`, `puzzle-input` …), und nur wissen, was ihre zwei Sichten und die
   Missionsdatei hergeben; jede Station löst `solve()` des Moduls über diese Sichten. Gehen im
   Spielertempo, Quelle erst lesen, Eingaben im Abstand von 3 bis 5,2 s, an den Drohnen vorbei von
@@ -1041,6 +1041,11 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Beweis: 100 Seeds auf falschen Timern gewonnen ohne Alarm (5,3 bis 7,6 min auf der Uhr), die
   drei Seeds der Auslosungen in Echtzeit auf 3 s gleich; Rundgang-Probe `demo` (vier Aufnahmen,
   23 s); Smoke prüft Raum, Sicht und `/health`; `docs/gameplay.md`, „Die Demo".
+- Zusatz (Uros, 2026-11-19): Im Kopf des Publikums steht das Schild „Demo"; die offene Seite
+  fragt alle 4 min `/health` ab (hält Render Free wach) und ist nach Neustart oder Abbruch ohne
+  Neuladen wieder im Publikum (Probe: Server unter der Seite getötet, 3,4 s nach dem Start zurück).
+  Serverprozess auf dem M4: 0 Zuschauende 45 MB und 0,05 % eines Kerns, 3: 58 MB und 0,8 %,
+  60: 89 MB und 3,0 %, 654 kB/s hinaus. QR-Codes (Menü, Lobby, Publikum) folgen im selben Branch.
 - Auf dem quer gehaltenen Handy steht „Demo" nicht im Menü (sieben Punkte füllen 390 px Höhe, wie
   bisher ohne „Einstellungen"); dorthin führt der Link, und hochkant steht der Punkt da.
 - Offen: Die 23 Sprechtexte warten weiter auf Uros' Render; die Demo fügt keinen hinzu.

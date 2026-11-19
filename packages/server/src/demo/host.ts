@@ -26,8 +26,8 @@ import { Seat, type Line } from './seat.js';
 
 export { DEMO_CODE };
 
-/** The names of the demo crew's two seats: machines of the lab, nobody's name. */
-export const DEMO_NAMES = ['Automat A', 'Automat B'] as const;
+/** The names of the demo crew's two seats, as Uros named them (2026-11-19). */
+export const DEMO_NAMES = ['HCW Bachelor', 'HCW Master'] as const;
 
 /** How often the crew takes its next step, ms: about a page's twelve position updates a second. */
 const TICK_MS = 80;

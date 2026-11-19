@@ -105,10 +105,12 @@ wiederherstellen ([`docs/accounts.md`](docs/accounts.md)).
 Figuren und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code
 weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter
 *Beitreten* bleibt ein Code-Feld für direkte Verabredungen, daneben *Zuschauen*. *Demo* führt
-ohne Namen, Konto und Code ins Publikum des Vorführraums, den der Server selbst spielt: zwei
-Automaten fahren Blackout von der Eröffnung bis zur Luke, Lauf um Lauf, solange jemand zusieht;
+ohne Namen, Konto und Code ins Publikum des Vorführraums, den der Server selbst spielt: „HCW
+Bachelor" und „HCW Master" fahren Blackout von der Eröffnung bis zur Luke, Lauf um Lauf, solange jemand zusieht;
 derselbe Weg als Link ist `/?demo=1` (für einen QR-Code), „Zuschauen beenden" führt zurück ins
-Menü (`docs/gameplay.md`, „Die Demo"). Auf einem quer gehaltenen Handy fehlt der Punkt wie die
+Menü (`docs/gameplay.md`, „Die Demo"). Eine offene Demo-Seite fragt alle vier Minuten `/health`
+ab und hält so einen Server wach, der ohne Anfragen einschläft (Render Free: 15 Minuten); nach
+einem Neustart oder Verbindungsabbruch ist sie von selbst wieder im Publikum. Auf einem quer gehaltenen Handy fehlt der Punkt wie die
 Einstellungen: Für beide ist die Spalte dort zu kurz. Bindet ein
 laufender Einsatz den Dienstausweis, steht seine Karte als erster Menüpunkt da. In die Lobby
 und zurück geht es durch die Schiebetüren des Labors; ab dem ersten Klick oder Tastendruck
@@ -385,8 +387,9 @@ Paketfilters, `firewall`, `hall` (die Übungshalle bis zur Siegerkarte), `rotati
 Wechselprobe auf zwei Seeds, siehe unten), `music` (die Musikpakete
 in den Einstellungen auf einer eigenen Menüseite: ein anderes Paket hörbar, Vorhören, nach dem
 Neuladen behalten) und `demo` (der Vorführraum: „Demo" im Menü eines Laptops, das Publikum mit
-seiner Zeile und beiden Automaten, dann ein Handy über `/?demo=1`, hochkant und quer, und zurück
-ins Menü); Blackout nennt alle acht im Log als ausgelassen. Der Rundgang selbst: `screens`
+dem Schild „Demo" und beiden Figuren, dann ein Handy über `/?demo=1`, hochkant und quer, zurück
+ins Menü, und der Server unter der zuschauenden Seite getötet und neu gestartet: sie ist ohne
+Neuladen wieder im Publikum); Blackout nennt alle acht im Log als ausgelassen. Der Rundgang selbst: `screens`
 (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr), `intro` (die Eröffnung bis
 `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem gewonnenen Systemcheck die
 Einsätze des Kontos, sein Kennwort, die Anmeldung auf einem zweiten Gerät, der Kontowechsel und sein
@@ -425,8 +428,8 @@ s:
 mit `SHOTS_ONLY=firewall` bei Last um 4 (17.11.2026), und die Übungshalle braucht an ihrem
 Paketfilter 55,1 s dazu. `music` (M-packs) spielt nur im Systemcheck: 4,9 s im CI,
 9,7 s allein mit `SHOTS_ONLY=music` bei Last um 20. `demo` (D-demo) spielt nur im Systemcheck:
-23,2 s allein mit `SHOTS_ONLY=demo` bei Last um 5 (19.11.2026), davon rund 19 s Warten, bis beide
-Automaten am Hauptschalter stehen.
+31,1 s allein mit `SHOTS_ONLY=demo` bei Last um 6 (19.11.2026), davon rund 19 s Warten, bis beide
+Figuren am Hauptschalter stehen, und 8 s für den Neustart des Servers.
 
 `rotation` (B-rotation) spielt nur im Systemcheck: Die Probemission
 `tools/fixtures/rotation-probe.json` („Wechselprobe") hat an ihrem mittleren Platz einen

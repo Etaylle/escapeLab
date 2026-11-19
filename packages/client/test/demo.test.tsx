@@ -6,7 +6,8 @@ import { WORLD, offVoice } from '../../core/test/voice.js';
 import { asksForDemo, readDemoLink, takeDemoLink } from '../src/demoLink.js';
 import { demoWay, leaveFor, pickOf } from '../src/screens/Join.js';
 import { MENU_LABELS, menuItems, opensPanel } from '../src/screens/MainMenu.js';
-import { DEMO_LINE, SpectateScreen } from '../src/screens/Spectate.js';
+import { KEEP_AWAKE_MS, keepAwake } from '../src/keepAwake.js';
+import { DEMO_LABEL, DEMO_LINE, SpectateScreen } from '../src/screens/Spectate.js';
 
 /**
  * „Demo" in the main menu, the demo's link and the line over the demo room's audience: the way
@@ -146,8 +147,8 @@ const LOBBY = {
   deadlineAt: null,
   lights: { out: false, outAt: null },
   players: [
-    { id: 'a', name: 'Automat A', color: '#2dd4bf', connected: true },
-    { id: 'b', name: 'Automat B', color: '#f472b6', connected: true },
+    { id: 'a', name: 'HCW Bachelor', color: '#2dd4bf', connected: true },
+    { id: 'b', name: 'HCW Master', color: '#f472b6', connected: true },
   ],
   panels: [],
   events: [],
@@ -174,20 +175,60 @@ function audience(demo: boolean): string {
 }
 
 describe('the demo room’s audience', () => {
-  it('reads one line that the plant plays by itself, and any other room’s audience none', () => {
-    expect(audience(true)).toContain(`<p class="demo-line">${DEMO_LINE}</p>`);
-    expect(audience(false)).not.toContain('demo-line');
-    expect(audience(true)).toContain('Automat A');
-    expect(audience(true)).toContain('Zuschauen beenden');
+  it('is labelled „Demo" beside the mission’s name, over a line that the plant plays itself', () => {
+    const html = audience(true);
+    expect(html).toContain(`Blackout im Labor<span class="demo-label">${DEMO_LABEL}</span></h1>`);
+    expect(html).toContain(`<p class="demo-line">${DEMO_LINE}</p>`);
+    expect(html).toContain('HCW Bachelor');
+    expect(html).toContain('HCW Master');
+    expect(html).toContain('Zuschauen beenden');
+    // Any other room's audience has neither.
+    expect(audience(false)).not.toContain('demo-l');
   });
 
-  it('says it in the world’s voice, at 14 px by the text size set', () => {
-    expect(DEMO_LINE).toBe(
-      'Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst, ' +
-        'an den Pulten stehen zwei Automaten.',
-    );
+  it('says both at 14 px by the text size set, the line in the world’s voice', () => {
+    expect(DEMO_LABEL).toBe('Demo');
+    expect(DEMO_LINE).toBe('Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst.');
     expect(offVoice([DEMO_LINE], WORLD)).toEqual([]);
-    const line = ruleOf(css('ui.css'), '.demo-line');
-    expect(line).toContain('font-size: calc(14px * var(--text-scale));');
+    const sheet = css('ui.css');
+    for (const selector of ['.demo-label', '.demo-line']) {
+      expect(ruleOf(sheet, selector)).toContain('font-size: calc(14px * var(--text-scale));');
+    }
+  });
+
+  it('keeps the label on a phone, upright or sideways, and leaves the line to wide windows', () => {
+    const sheet = css('ui.css');
+    const at = sheet.indexOf(
+      '@media (max-width: 560px), (orientation: landscape) and (max-height: 500px) {\n  .demo-line',
+    );
+    expect(at).toBeGreaterThan(0);
+    const narrow = sheet.slice(at, sheet.indexOf('\n}\n', at));
+    expect(narrow).toMatch(/\.demo-line \{\s*display: none;/);
+    expect(narrow).not.toContain('.demo-label');
+  });
+});
+
+describe('the demo room’s audience keeping its server awake', () => {
+  it('asks /health every four minutes, whatever becomes of a request, until it stops', async () => {
+    vi.useFakeTimers();
+    const asked: string[] = [];
+    const page = {
+      fetch: (address: string, init: { cache: 'no-store' }) => {
+        asked.push(`${address} ${init.cache}`);
+        return asked.length === 1 ? Promise.reject(new Error('offline')) : Promise.resolve();
+      },
+      setInterval: (run: () => void, ms: number) => setInterval(run, ms),
+      clearInterval: (timer: never) => clearInterval(timer),
+    };
+    const stop = keepAwake(page);
+    expect(asked).toEqual([]);
+    await vi.advanceTimersByTimeAsync(KEEP_AWAKE_MS * 3);
+    expect(asked).toEqual(Array.from({ length: 3 }, () => '/health no-store'));
+    // Well inside the quarter of an hour after which a sleeping host puts its instance down.
+    expect(KEEP_AWAKE_MS).toBeLessThanOrEqual(5 * 60_000);
+    stop();
+    await vi.advanceTimersByTimeAsync(KEEP_AWAKE_MS * 3);
+    expect(asked).toHaveLength(3);
+    vi.useRealTimers();
   });
 });
