@@ -11,6 +11,7 @@ import {
 } from '@escapelab/core';
 import { formatLeft } from '../clock.js';
 import { takeDemoLink } from '../demoLink.js';
+import { openArcade } from '../arcade/door.js';
 import { useNow } from '../hooks.js';
 import { crewPass, lastColor, lastName } from '../pass.js';
 import { dropSnapshot, resumeOf } from '../snapshots.js';
@@ -381,10 +382,11 @@ function useChoosing(panel: PanelId | null): void {
 /**
  * The menu left for a page of its own (`open`) by item `item`, after the hero's beat: the lab's
  * doors before the editor, the short shutter before every other page (DoorWipe.tsx). The demo
- * is asked for at once: the doors close over the menu as its room comes, as for any room.
+ * is asked for at once: the doors close over the menu as its room comes, as for any room; the
+ * break-room machine opens at once over the menu.
  */
 export function leaveFor(item: MenuItemId, open: () => void): void {
-  if (item === 'demo') {
+  if (item === 'demo' || item === 'arcade') {
     open();
   } else if (item === 'editor') {
     doorsThen(open, true);
@@ -506,6 +508,7 @@ export function JoinScreen(props: Props) {
   const pages = {
     ...pagesOf(props, pickedMission(missions, props.picked)),
     ...demoWay(send, connected),
+    arcade: () => openArcade('menu'),
   };
   const [taken, setTaken] = useState<Taken | null>(null);
   const card = seat !== null && (

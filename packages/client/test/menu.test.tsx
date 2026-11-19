@@ -148,6 +148,7 @@ describe('the menu', () => {
       'Beitreten',
       'Offene Runden',
       'Demo',
+      'Arcade',
       'QR-Code',
       'Handbuch',
       'Bestenliste',

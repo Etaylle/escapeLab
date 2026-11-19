@@ -543,14 +543,15 @@
   }
 
   /*
-   * Seven items a fingertip high fit a window 390 px high, and the menu has ten: the settings
+   * Seven items a fingertip high fit a window 390 px high, and the menu has eleven: the settings
    * go from the column, as the gear in the bar right over it opens them, the editor, a tool for
-   * a wider window, and the site's QR code, which a phone shows upright. The demo stays: a
-   * visitor comes by phone.
+   * a wider window, the site's QR code, which a phone shows upright, and the break-room machine,
+   * which opens upright here and from every lobby. The demo stays: a visitor comes by phone.
    */
   .menu-list li:has(> .menu-item[data-item='settings']),
   .menu-list li:has(> .menu-item[data-item='editor']),
-  .menu-list li:has(> .menu-item[data-item='qr']) {
+  .menu-list li:has(> .menu-item[data-item='qr']),
+  .menu-list li:has(> .menu-item[data-item='arcade']) {
     display: none;
   }
 

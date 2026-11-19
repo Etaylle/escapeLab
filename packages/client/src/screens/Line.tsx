@@ -1,4 +1,5 @@
 import type { PlayerView } from '@escapelab/core';
+import { ArcadeButton } from '../arcade/ArcadeDoor.js';
 import { useNow } from '../hooks.js';
 import type { LineStatus, Retry } from '../line.js';
 import { GiveUpButton } from './GiveUp.js';
@@ -94,6 +95,7 @@ export function LineLostCard({ line }: { line: GameLine }) {
           Seite neu laden
         </button>
         {!restoring && <GiveUpButton onGiveUp={line.giveUp} />}
+        <ArcadeButton />
       </div>
     </div>
   );

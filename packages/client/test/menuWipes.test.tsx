@@ -90,8 +90,11 @@ describe('the menu left for a page of its own', () => {
     const openers = { openHandbook: noop, openMyRuns: noop, openEditor: noop, openSettings: noop };
     const pages = pagesOf({ ...openers, openHistory: noop }, 'blackout');
     const ways: Record<string, { kind: WipeKind; ms: number }> = {};
-    // „Demo" leads into a room, behind the room's own doors (test/demo.test.tsx).
-    const leaving = menuItems(true).filter((it) => !opensPanel(it) && it !== 'demo');
+    // „Demo" leads into a room, behind the room's own doors (test/demo.test.tsx); „Arcade" opens
+    // the break-room machine over the menu at once (test/arcade/door.test.tsx).
+    const leaving = menuItems(true).filter(
+      (it) => !opensPanel(it) && it !== 'demo' && it !== 'arcade',
+    );
     for (const item of leaving) {
       const open = pages[item];
       if (open === undefined) throw new Error(`no page for ${item}`);

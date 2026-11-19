@@ -59,10 +59,11 @@ describe('a bus pulled down', () => {
 
   it('pulls the music 8 dB under a voice, 6 under the klaxon and siren, 24 under a preview', () => {
     // A voice: mission control's on the radio, and the crew's in the lobby over the menu's sound;
-    // a preview: a piece the settings play for the ear (musicPreview.ts). The beds feel voices.
+    // a preview: a piece the settings play for the ear (musicPreview.ts). The beds feel voices;
+    // the break-room machine open pulls the music 30 dB and the beds 18 dB (arcade/).
     expect(DUCK_DB).toEqual({
-      music: { voice: -8, alarm: -6, siren: -6, crew: -8, preview: -24 },
-      ambience: { voice: -4, crew: -4 },
+      music: { voice: -8, alarm: -6, siren: -6, crew: -8, preview: -24, arcade: -30 },
+      ambience: { voice: -4, crew: -4, arcade: -18 },
     });
     expect([DUCK_ATTACK_S, DUCK_RELEASE_S]).toEqual([0.05, 0.4]);
   });
