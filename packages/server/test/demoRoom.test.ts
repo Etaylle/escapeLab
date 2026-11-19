@@ -157,7 +157,7 @@ describe('the demo room', () => {
     expect(drawPools(mission.puzzles, 56)).toEqual({ wechsel: 'frequenz' });
   });
 
-  it('rests once nobody has watched for a minute, without a timer, and plays anew for the next', () => {
+  it('rests once nobody has watched for a minute, without a timer; plays anew for the next', () => {
     const host = demoOn();
     expect(vi.getTimerCount()).toBe(0);
     const watcher = watch(host);
