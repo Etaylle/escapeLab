@@ -15,6 +15,7 @@ import {
 import { AccountDesk } from './accounts.js';
 import { customMissions, serveCustomMissions } from './customMissions.js';
 import { dailySalt } from './dailySalt.js';
+import { DemoHost } from './demo/host.js';
 import { HEARTBEAT_MS, startHeartbeat } from './heartbeat.js';
 import { iceLogLine, iceServers, type IceSetup } from './iceServers.js';
 import { SignInGuard } from './login.js';
@@ -89,11 +90,14 @@ const manager = new RoomManager(
   instanceId,
 );
 setInterval(() => manager.sweep(), 60_000).unref();
-// What /health says beside the missions: no code, no name.
+// The demo room: the server plays the default mission itself, for whoever watches (demo/host.ts).
+const demo = new DemoHost(catalog.default);
+// What /health says beside the missions: no code, no name, the demo room apart from the rooms.
 const health: Health = {
   rooms: () => manager.counts(),
   uptimeSec: () => Math.floor(process.uptime()),
   version: versionOf(process.env),
+  demo: () => demo.counts(),
 };
 /** The JSON routes: /health, the missions' and the Bestenliste's; null for any other path. */
 const jsonFor = (url: string): ApiResponse | null =>
@@ -147,6 +151,7 @@ const served = serveSockets(wss, {
   front: frontOf(process.env),
   signIns,
   iceServers: ice.servers,
+  demo,
 });
 // A socket gone silent is found out and closed, so that the room pauses for its player; the
 // log names the room and the seat of each socket it cuts.

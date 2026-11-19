@@ -74,6 +74,7 @@ describe('GET /health', () => {
         ok: true,
         missions: shipped.all.map((m) => m.id),
         rooms: { total: 4, running: 2, paused: 1, players: 6, spectators: 1 },
+        demo: null,
         uptimeSec: 42,
         version: 'c0ffee',
       },
