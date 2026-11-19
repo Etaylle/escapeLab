@@ -18348,7 +18348,8 @@ async function demoFromMenu(context) {
  */
 async function demoTakesNothing(page, sent) {
   const before = sent.length;
-  for (const key of ['n', 'i', 'e', 'q', 'w', 'a', 's', 'd', 'Space', 'Enter', 'ArrowLeft']) {
+  // The game's keys — not the arrows and the digits, which are the demo's own (its switcher's).
+  for (const key of ['n', 'i', 'e', 'q', 'w', 'a', 's', 'd', 'Space', 'Enter', 'c', 'm']) {
     await page.keyboard.press(key);
   }
   const box = await page.locator('.demo-picture').boundingBox();
