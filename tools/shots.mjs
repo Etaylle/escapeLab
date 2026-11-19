@@ -13605,7 +13605,7 @@ async function captureResting(player) {
 
 /**
  * The Notstromkasten where the run has it at its Wechselplatz: the guest walks to the
- * Wartungsbuch in the Maschinenraum, where the plan lays it, and on to the meter in the Labor,
+ * Wartungsbuch in the Labor, where the plan lays it, and on to the meter a few steps on,
  * the host to the fuse box inside the Maschinenraum's door, both past the patrols; clear of the
  * next emergency they open their panels, the meter measures every wire once — the needle's
  * swing shot (meter-swing.png) — and the box is cut as the plan pins it (`cutAsPinned`).
@@ -13628,7 +13628,7 @@ async function playNotstrom(host, guest) {
 
 /**
  * The Signalkette where the run has it at its Wechselplatz, both patrols out: the guest walks
- * past them to console A at the Flur's east end, the host to console B in the Maschinenraum
+ * past them to console A in the Archiv, the host to console B in the Maschinenraum
  * (`atConsole`, each from haven to haven); clear of the next emergency they open their panels
  * and work it as the plan pins it (`solveSignal`).
  */
