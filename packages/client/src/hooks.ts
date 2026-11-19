@@ -7,6 +7,7 @@ import {
   type PointerEvent,
 } from 'react';
 import { serverNow } from './clock.js';
+import { keysDeaf } from './input/deaf.js';
 import { usePause } from './menuLayer.js';
 
 /** The wall clock, read again every `intervalMs`. */
@@ -97,7 +98,7 @@ export function useKeys(keys: readonly string[], onKey: (key: string) => void): 
   useEffect(() => {
     const listened = keysIn(wanted);
     const onDown = (e: KeyboardEvent): void => {
-      if (!keyTaken(listened, e, typing(), covered.current)) {
+      if (keysDeaf() || !keyTaken(listened, e, typing(), covered.current)) {
         return;
       }
       // The key is the game's, auto-repeat too: F5 bound to the notepad reloads nothing.

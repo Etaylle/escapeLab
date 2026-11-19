@@ -32,6 +32,7 @@ import {
   emergencyOver,
   footstep,
   graphCensus,
+  hushed,
   klaxon,
   lightsOnClick,
   lockerOpen,
@@ -97,6 +98,8 @@ import {
   followServer,
   newSim,
   walk,
+  watchSelf,
+  type WalkSound,
   type Sim,
 } from './sim.js';
 import { doorMoved, HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
@@ -129,6 +132,12 @@ interface Props {
   /** audience view: whole map revealed, no controls, no own avatar */
   spectator: boolean;
   /**
+   * the view is a seat's that this screen watches and does not play — the demo's audience on
+   * the own view of one of its crew —: the avatar goes where the room has that seat, and the
+   * world takes no key, no finger and no controller, offers no control and sends nothing
+   */
+  watched?: boolean;
+  /**
    * when the lights went out on this screen, epoch ms (coldOpen.ts
    * `useDarkSince`): the cold open runs from there; null while the power is on
    */
@@ -147,6 +156,16 @@ interface Props {
   holdTips: boolean;
   /** a menu stands over the world (menuLayer.ts): the keys are the menu's, the world hears none */
   menuOver?: boolean;
+  /**
+   * the world is on and heard, and something covers its picture — the demo's whole lab over the
+   * seat it is heard from —: it steps and listens on, and draws no frame
+   */
+  covered?: boolean;
+  /**
+   * the world is a picture over another world that is heard (`covered`): it starts no sound and
+   * stops none — not a door, not the hum, not the music as it goes
+   */
+  silent?: boolean;
   /** opens the info panel, which owns the briefing and the key list */
   onToggleInfo: () => void;
   /** E at a manual object the server counts this player at: reading needs no message */
@@ -160,11 +179,23 @@ interface Props {
   listen?: Connection['listen'];
 }
 
+/**
+ * Whether this screen plays the seat it shows — and so has the world's controls, streams where
+ * it stands and reads the world's tips: not the audience, nor a screen that watches a seat.
+ */
+const plays = (props: Pick<Props, 'spectator' | 'watched'>): boolean =>
+  !props.spectator && props.watched !== true;
+
+/** Whether this screen shows a seat it does not play (`Props.watched`). */
+const watchesSeat = (props: Pick<Props, 'watched'>): boolean => props.watched === true;
+
 /** The latest of what the world's loop and its listeners read, as the component last rendered. */
 interface Live extends Latest {
   station: PuzzleView | null;
   /** a menu stands over the world: it hears no key (`worldHears`) */
   menuOver: boolean;
+  /** the world's picture is covered: no frame is drawn (`Props.covered`) */
+  covered: boolean;
   /** where the quick chat's wheel stands: what the digits say (ChatWheel.tsx) */
   wheel: Wheel;
   send: (msg: ClientMessage) => void;
@@ -182,6 +213,8 @@ interface Loop extends FrameSource {
   pings: React.MutableRefObject<MapPing[]>;
   /** the sound systems this page's query switched off (`?audio-off=`) */
   soundOff: ReadonlySet<SoundSystem>;
+  /** the world starts and stops no sound (`Props.silent`) */
+  silent: boolean;
   /** the frame drawn last, for the walkthrough's probe of the glow; null before the first */
   drawn: Frame | null;
 }
@@ -244,8 +277,15 @@ function useLatest<T>(value: T): React.MutableRefObject<T> {
  * fail with the picture (coldOpen.ts) — under reduced motion with no flicker to arc in —
  * and where it lands in the dark, the hum just ends.
  */
-function usePowerHum(darkSince: number | null, live: React.MutableRefObject<Live>): void {
+function usePowerHum(
+  darkSince: number | null,
+  live: React.MutableRefObject<Live>,
+  silent: boolean,
+): void {
   useEffect(() => {
+    if (silent) {
+      return;
+    }
     if (darkSince === null) {
       startPowerHum();
       return;
@@ -256,7 +296,7 @@ function usePowerHum(darkSince: number | null, live: React.MutableRefObject<Live
     } else {
       stopPowerHum();
     }
-  }, [darkSince, live]);
+  }, [darkSince, live, silent]);
 }
 
 /** E's part of the world (press.ts) as the loop has it now. */
@@ -600,8 +640,13 @@ function runFrames(loop: Loop, traced: Traced | null): () => void {
     frames += 1;
     const map = loop.live.current.view.map;
     if (map !== null) {
-      step(loop, dt, now, map);
-      if (drawsFrame(frames, { locked: loop.live.current.locked, spectator: loop.spectator })) {
+      if (loop.silent) {
+        hushed(() => step(loop, dt, now, map));
+      } else {
+        step(loop, dt, now, map);
+      }
+      const { locked, covered } = loop.live.current;
+      if (!covered && drawsFrame(frames, { locked, spectator: loop.spectator })) {
         render(loop, map);
         traced?.work.record(loop.kit.census);
       }
@@ -622,24 +667,11 @@ function step(loop: Loop, dt: number, now: number, map: WorldMap): void {
   // Spectators own no avatar, so every streamed position is "someone else".
   const youId = spectator ? '' : view.you.id;
   const run = view.startedAt;
-  if (spectator) {
-    sim.cam.x = map.width / 2;
-    sim.cam.y = map.height / 2;
-    // The audience steers nothing.
-    sim.pad = NO_STEER;
-  } else {
-    followServer(sim, loop.positions.current, map, youId, run);
-    // A controller steers as the keys do (input/padRuntime.ts).
-    sim.pad = padSteer();
-  }
-  // The opening holds the avatar where the run put it: no step, no position going out.
-  sim.held = heldBack(loop.live.current);
-  if (sim.held) {
-    sim.keys.clear();
-  }
-  const sound = walk(sim, map, dt, loop.live.current.locked || sim.held);
+  // The crew REMOTE_DELAY_MS in the past, where their samples put them (trail.ts).
+  const drawnAt = serverAt(now) - REMOTE_DELAY_MS;
+  const sound = selfStep(loop, map, dt, drawnAt);
   sim.selfAt = now;
-  if (!spectator) {
+  if (!spectator && loop.watched !== true) {
     pressWhenInReach(pressWorld(loop), performance.now());
   }
   if (sound === 'bump') {
@@ -647,8 +679,6 @@ function step(loop: Loop, dt: number, now: number, map: WorldMap): void {
   } else if (sound !== null) {
     footstep(sound === 'sprint');
   }
-  // The crew REMOTE_DELAY_MS in the past, where their samples put them (trail.ts).
-  const drawnAt = serverAt(now) - REMOTE_DELAY_MS;
   followOthers(sim, positionsOf(loop.positions.current, run), youId, drawnAt);
   slideDoors(sim, map, spectator ? null : sim.self);
   if (map !== sim.seen) {
@@ -662,6 +692,57 @@ function step(loop: Loop, dt: number, now: number, map: WorldMap): void {
     follow(sim, dt, loop.insets.top, loop.live.current.reduced);
   }
   sim.time += dt;
+}
+
+/** What a frame's step of this screen's own figure goes by: the loop's parts it reads. */
+type Walker = Pick<Loop, 'sim' | 'live' | 'positions' | 'spectator' | 'watched'>;
+
+/**
+ * The frame's step of the figure this screen stands for: a seat watched goes where the room has
+ * it as of `at` (`watchSeat`), whatever key is held; a seat played walks by its keys.
+ */
+export function selfStep(loop: Walker, map: WorldMap, dt: number, at: number): WalkSound | null {
+  return loop.watched === true ? watchSeat(loop, map, at) : walkSelf(loop, map, dt);
+}
+
+/**
+ * The frame's walk of a seat watched (`Props.watched`): where the room has it, a moment ago as
+ * the rest of the crew is drawn; another seat on air is a first look at the lab — what that
+ * seat had found before is no news on this screen (`firstLook`).
+ */
+function watchSeat(loop: Walker, map: WorldMap, at: number): WalkSound | null {
+  const { sim } = loop;
+  const view = loop.live.current.view;
+  if (sim.watching !== null && sim.watching !== view.you.id) {
+    sim.seen = null;
+  }
+  const seat = { youId: view.you.id, run: view.startedAt };
+  return watchSelf(sim, loop.positions.current, map, seat, at);
+}
+
+/**
+ * The frame's walk of this screen's own avatar, by the keys and the controller — none for the
+ * audience, whose camera stands over the middle of the lab.
+ */
+function walkSelf(loop: Walker, map: WorldMap, dt: number): WalkSound | null {
+  const { sim, spectator } = loop;
+  const view = loop.live.current.view;
+  if (spectator) {
+    sim.cam.x = map.width / 2;
+    sim.cam.y = map.height / 2;
+    // The audience steers nothing.
+    sim.pad = NO_STEER;
+  } else {
+    followServer(sim, loop.positions.current, map, view.you.id, view.startedAt);
+    // A controller steers as the keys do (input/padRuntime.ts).
+    sim.pad = padSteer();
+  }
+  // The opening holds the avatar where the run put it: no step, no position going out.
+  sim.held = heldBack(loop.live.current);
+  if (sim.held) {
+    sim.keys.clear();
+  }
+  return walk(sim, map, dt, loop.live.current.locked || sim.held);
 }
 
 /**
@@ -908,6 +989,35 @@ function profilePasses(kit: RenderKit): (() => void) | null {
 }
 
 /**
+ * The page's probes on this world (`?trace=1`, `?profile=1`): its frames, its picture, its
+ * passes — and how to take them off. A silent picture over a world that is heard leaves them to
+ * that world.
+ */
+function probeWorld(loop: Loop): { traced: Traced | null; drop: () => void } {
+  if (loop.silent) {
+    return { traced: null, drop: () => undefined };
+  }
+  const traced = traceFrames(loop);
+  const graphics = traceGraphics(loop);
+  const profiled = profilePasses(loop.kit);
+  const drop = (): void => {
+    traced?.drop();
+    graphics?.();
+    profiled?.();
+  };
+  return { traced, drop };
+}
+
+/** Every sound of the lab that goes on by itself, stopped: a world that was heard goes. */
+function stopLabSounds(): void {
+  stopAmbience();
+  stopMusic();
+  stopSpatial();
+  stopDanger();
+  stopPowerHum();
+}
+
+/**
  * The world's life from mount to unmount: the canvas and its kit, the
  * simulation, the listeners, the position stream and the frame loop.
  */
@@ -939,6 +1049,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheel, setControlsReach }: 
       kit,
       sim,
       spectator: props.spectator,
+      watched: watchesSeat(props),
       touchPad,
       insets,
       live,
@@ -950,22 +1061,23 @@ function useWorldLoop({ props, refs, live, alarm, setWheel, setControlsReach }: 
       clips: new WeakMap(),
       texts: { s: 0, dpr: 0, scale: 0, styles: worldText(48, 1) },
       soundOff,
+      silent: props.silent === true,
       drawn: null,
     };
     refs.interactRef.current = () => tryInteract(loop);
     refs.dropRef.current = () => dropItem(loop);
-    // An audience connection watches only: no controls, no position stream.
-    const unlisten = props.spectator ? null : listen(loop, setWheel);
-    const unping = props.spectator ? null : onPadPing(() => padPing(loop));
+    // An audience connection watches only, and so does a screen on a seat it does not play:
+    // no controls, no position stream.
+    const watches = !plays(props);
+    const unlisten = watches ? null : listen(loop, setWheel);
+    const unping = watches ? null : onPadPing(() => padPing(loop));
     const unhear = props.listen?.({
       message: (msg) => hearAnswer(sim.presses, msg, performance.now()),
       closed: () => undefined,
     });
-    const posTimer = streamPositions(sim, props.spectator, (msg) => live.current.send(msg));
-    const traced = traceFrames(loop);
-    const tracedGraphics = traceGraphics(loop);
-    const profiled = profilePasses(kit);
-    const stop = runFrames(loop, traced);
+    const posTimer = streamPositions(sim, watches, (msg) => live.current.send(msg));
+    const probes = probeWorld(loop);
+    const stop = runFrames(loop, probes.traced);
     const ears = setInterval(() => hearTheLab(loop), HEAR_MS);
     return () => {
       stop();
@@ -975,14 +1087,10 @@ function useWorldLoop({ props, refs, live, alarm, setWheel, setControlsReach }: 
       insets.disconnect();
       unlisten?.();
       unping?.();
-      stopAmbience();
-      stopMusic();
-      stopSpatial();
-      stopDanger();
-      stopPowerHum();
-      traced?.drop();
-      tracedGraphics?.();
-      profiled?.();
+      if (!loop.silent) {
+        stopLabSounds();
+      }
+      probes.drop();
       dropLight(kit);
       refs.simRef.current = null;
       refs.interactRef.current = null;
@@ -1205,7 +1313,7 @@ interface WorldState {
  * GameWorld renders from, in the order React keeps the hooks.
  */
 function useWorld(props: Props): WorldState {
-  const { view, spectator, darkSince, inputLocked, holdTips } = props;
+  const { view, darkSince, inputLocked, holdTips } = props;
   const finale = props.finale ?? null;
   const station = props.station ?? null;
   const [wheel, setWheel] = useState<Wheel>(null);
@@ -1225,6 +1333,7 @@ function useWorld(props: Props): WorldState {
     darkSince,
     locked: inputLocked,
     menuOver: props.menuOver === true,
+    covered: props.covered === true,
     station,
     wheel,
     finale,
@@ -1244,20 +1353,22 @@ function useWorld(props: Props): WorldState {
       simRef.current?.keys.clear();
     }
   }, [inputLocked, live]);
-  const tip = useWorldTip(view, station, spectator, holdTips, finale);
-  usePowerHum(darkSince, live);
+  const tip = useWorldTip(view, station, !plays(props), holdTips, finale);
+  const silent = props.silent === true;
+  const heard = silent ? { escapeSince: null, finale: null } : { escapeSince, finale };
+  usePowerHum(darkSince, live, silent);
   // The world answers an alarm (alarm.ts): the klaxon while the run goes on — the alarm that
   // ends it has the ending's own sound, and an open device sounds its own horn instead — the
   // strobe and the shake, the drones' marks.
   const alarm = useAlarm(view.penaltySeq, () => {
-    if (worldHornDue(live.current.view.phase, live.current.station != null)) {
+    if (!silent && worldHornDue(live.current.view.phase, live.current.station != null)) {
       klaxon();
     }
   });
   const alarmRef = useLatest(alarm);
   const alarmClass = useAlarmClasses(alarm, reduced);
-  useEscapeSounds(escapeSince, view.phase === 'playing' && finale === null);
-  useFinaleSounds(finale);
+  useEscapeSounds(heard.escapeSince, view.phase === 'playing' && finale === null);
+  useFinaleSounds(heard.finale);
   const refs = { canvasRef, controlsRef, simRef, interactRef, dropRef };
   useWorldLoop({ props, refs, live, alarm: alarmRef, setWheel, setControlsReach });
   useWheelEscape(wheel !== null, setWheel, live);
@@ -1280,6 +1391,7 @@ function RedEdge({ view, ending }: { view: PlayerView; ending: boolean }) {
 
 export function GameWorld(props: Props) {
   const { spectator } = props;
+  const played = plays(props);
   const { refs, live, tip, alarmClass, wheel, setWheel, controlsReach } = useWorld(props);
   const [writing, setWriting] = useState(false);
   // One box over the world's foot at a time: the field shuts the quick chat's wheel.
@@ -1297,7 +1409,7 @@ export function GameWorld(props: Props) {
         className={`world-canvas ${spectator ? 'world-canvas--wide' : ''}`}
       />
       {!spectator && <RedEdge view={props.view} ending={props.finale != null} />}
-      {!spectator && <NoLink players={props.view.players} />}
+      {played && <NoLink players={props.view.players} />}
       {tip !== null && (
         // Just above the control cluster, wherever it reaches: never on the
         // avatar under the objective bar, nor on the minimap.
@@ -1305,7 +1417,7 @@ export function GameWorld(props: Props) {
           {tip.text}
         </div>
       )}
-      {!spectator && (
+      {played && (
         <WorldControls
           refs={refs}
           live={live}
@@ -1322,7 +1434,7 @@ export function GameWorld(props: Props) {
           onMove={(move) => moveWheel(props.send, setWheel, move)}
         />
       )}
-      {!spectator && (
+      {played && (
         <WorldChat
           players={props.view.players}
           send={props.send}

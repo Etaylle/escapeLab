@@ -1,6 +1,13 @@
 import type { AccountView, LoginDone, Seat, SpectatorView } from '@escapelab/core';
 import type { Loaded } from '../src/runStats.js';
-import type { MyRuns, Page, Restoring, Takeover } from '../src/ws.js';
+import {
+  demoFeedWith,
+  type DemoFeed,
+  type MyRuns,
+  type Page,
+  type Restoring,
+  type Takeover,
+} from '../src/ws.js';
 
 /** A storage kept in a map, as the browser's local and session storage are. */
 export function storage(items: Map<string, string>) {
@@ -27,6 +34,8 @@ export function page() {
     myRuns: null as Loaded<MyRuns> | null,
     /** how many watch the room, as the page last heard it */
     watching: null as number | null,
+    /** the demo's feed, as the page keeps it */
+    demo: { shot: null, views: {} } as DemoFeed,
     /** the banner's words, as the page last set them */
     banner: null as string | null,
     /** what each answer to an ask of a login said was done, in order */
@@ -61,6 +70,9 @@ export function page() {
     },
     setWatching: (count) => {
       got.watching = count;
+    },
+    noteDemo: (msg) => {
+      got.demo = demoFeedWith(got.demo, msg);
     },
     setError: (message) => {
       got.banner = message;

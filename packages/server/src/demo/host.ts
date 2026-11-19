@@ -1,12 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import {
   DEMO_CODE,
+  DEMO_PIN_DEFAULT,
   GameError,
   poolsOf,
   drawPools,
   scaleMission,
   type ClientMessage,
   type CrewPass,
+  type DemoPin,
+  type DemoShot,
   type Mission,
   type PlayerView,
   type ServerMessage,
@@ -14,6 +17,7 @@ import {
 import { GAME_KINDS, Room, type GameMessage } from '../room.js';
 import type { FinishedRun } from '../store/store.js';
 import { DemoCrew } from './crew.js';
+import { direct, type Cut, type Scene, type SeatScene } from './director.js';
 import { handsOf, Seat, type CrewSeat, type Line } from './seat.js';
 
 /**
@@ -23,6 +27,12 @@ import { handsOf, Seat, type CrewSeat, type Line } from './seat.js';
  * the manager's: nobody joins it, no list shows it, its runs are kept nowhere. It plays while
  * somebody watches, and for a while after; then it is closed and stands in its lobby, without a
  * timer, until the next of the audience comes — who sees a run from its start.
+ *
+ * Its audience is shown more than any other room's: beside the audience's view of the whole lab
+ * it is sent the own view of the seat the director has on air (director.ts), or of the seat a
+ * viewer pinned (`demo-view`). That gives away nobody's view: both seats are this server's own
+ * machines, and what they see no person plays by. No other room sends its audience a seat's view
+ * — `Room` has no way to; the host sends it here, over the lines its own seats hold.
  */
 
 export { DEMO_CODE };
@@ -134,6 +144,18 @@ export interface Wire {
   down: (msg: ServerMessage) => ServerMessage;
 }
 
+/** One of the demo's audience: its line, and what it pinned its screen to. */
+interface Viewer {
+  tell: (msg: ServerMessage) => void;
+  pin: DemoPin;
+}
+
+/** An audience connection on the demo room: `Room.attachSpectator`'s, and its pin. */
+export type DemoWatch = ReturnType<Room['attachSpectator']> & {
+  /** pins what this connection is shown (`DemoPin`): answered with the seat's view at once */
+  pin: (pin: DemoPin) => void;
+};
+
 /** A wire that hands on what it is given. */
 const PLAIN: Wire = { up: (msg) => msg, down: (msg) => msg };
 
@@ -146,6 +168,21 @@ export class DemoHost {
   private gotOn = { as: '', at: 0 };
   /** how many times the crew has started over since the run last got on */
   private complaints = 0;
+  /** who watches, by spectator id */
+  private viewers = new Map<string, Viewer>();
+  /** what the director has on air; null before its first cut */
+  private cut: Cut | null = null;
+  /** the seat last on air, by its place in the crew: the lab is heard from where it stands */
+  private ear: 0 | 1 = 0;
+  /** what the audience was last told is on air, and that as it was sent */
+  private shot: DemoShot | null = null;
+  private told = '';
+  /** the view of each seat as it was last sent on to the audience, by player id */
+  private relayed = new Map<string, string>();
+  /** when each seat last made a move at a console, epoch ms */
+  private acted: [number, number] = [0, 0];
+  /** the run and station the director last saw up, and when a station of that run was solved */
+  private solved = { run: null as number | null, index: 0, at: null as number | null };
   private ticking: NodeJS.Timeout | null = null;
   private closing: NodeJS.Timeout | null = null;
   /** the runs the demo started so far: the next plays the next of its seeds */
@@ -181,10 +218,16 @@ export class DemoHost {
       this.complaints += 1;
       console.warn(`[escapelab] demo: ${why}`);
     };
-    const seats = DEMO_NAMES.map((name) => {
+    this.viewers = new Map();
+    this.relayed = new Map();
+    this.cut = null;
+    const seats = DEMO_NAMES.map((name, index) => {
       const { playerId } = room.join(name, mintPass());
       const line: Line = {
         send: (msg) => {
+          if (msg.kind === 'puzzle-input') {
+            this.acted[index as 0 | 1] = Date.now();
+          }
           try {
             carry(room, playerId, this.wire.up(msg));
           } catch (err) {
@@ -194,7 +237,13 @@ export class DemoHost {
         },
       };
       const seat = new Seat(line, complain);
-      room.attach(playerId, (msg) => seat.hear(this.wire.down(msg)));
+      room.attach(playerId, (msg) => {
+        const heard = this.wire.down(msg);
+        seat.hear(heard);
+        if (heard.kind === 'view') {
+          this.relay(heard.view);
+        }
+      });
       return handsOf(seat);
     }) as [CrewSeat, CrewSeat];
     return [room, new DemoCrew(this.mission, seats, complain), seats];
@@ -209,6 +258,7 @@ export class DemoHost {
    */
   private tick(now: number): void {
     this.crew.tick(now);
+    this.directAt(now);
     const view = this.seats[0].view;
     const as = farOf(view);
     if (as !== this.gotOn.as) {
@@ -225,6 +275,122 @@ export class DemoHost {
       this.gotOn = { as, at: now };
       this.complaints = 0;
       this.live.runOut();
+    }
+  }
+
+  /** One of the crew's seats as the director sees it at this moment. */
+  private seatScene(index: 0 | 1): SeatScene {
+    const seat = this.seats[index];
+    return {
+      id: seat.id,
+      doing: this.crew.doing(seat),
+      actedAt: this.acted[index],
+      drones: Object.keys(seat.drones).length > 0,
+    };
+  }
+
+  /**
+   * When a station of the run on `view` was last solved, as of `now`: this moment, where the
+   * station up is a later one than at the last look; null for none yet, and in a new run.
+   */
+  private solvedBy(view: PlayerView | null, now: number): number | null {
+    const run = view?.phase === 'playing' ? view.startedAt : null;
+    const index = view?.currentPuzzleIndex ?? 0;
+    if (run !== this.solved.run) {
+      this.solved = { run, index, at: null };
+      this.acted = [0, 0];
+    } else if (index > this.solved.index) {
+      this.solved = { run, index, at: now };
+    }
+    return this.solved.at;
+  }
+
+  /** The demo as the director sees it at `now` (`Scene`). */
+  private sceneAt(now: number): Scene {
+    const view = this.seats[0].view;
+    const playing = view?.phase === 'playing';
+    return {
+      now,
+      phase: view?.phase ?? 'lobby',
+      opening: playing && !view.lights.out,
+      solvedAt: this.solvedBy(view, now),
+      seats: [this.seatScene(0), this.seatScene(1)],
+    };
+  }
+
+  /**
+   * The director's look at `now`: what is on air, told everybody who watches whenever it or what
+   * the crew is doing changed — and, on a cut to a seat, that seat's view to whoever follows the
+   * director.
+   */
+  private directAt(now: number): void {
+    const scene = this.sceneAt(now);
+    const before = this.cut?.onAir;
+    this.cut = direct(scene, this.cut);
+    const [a, b] = scene.seats;
+    this.ear = this.cut.onAir === b.id ? 1 : this.cut.onAir === a.id ? 0 : this.ear;
+    const shot: DemoShot = {
+      onAir: this.cut.onAir,
+      ear: scene.seats[this.ear].id,
+      doing: { [a.id]: a.doing, [b.id]: b.doing },
+      caption: this.crew.saying(now),
+    };
+    const said = JSON.stringify(shot);
+    if (said === this.told) {
+      return;
+    }
+    this.told = said;
+    this.shot = shot;
+    for (const viewer of this.viewers.values()) {
+      // The seat's view first, then the word that it is on air: no page shows an old view of it.
+      if (this.cut.onAir !== before && this.follows(viewer)) {
+        this.show(viewer);
+      }
+      viewer.tell({ kind: 'demo-shot', shot, at: now });
+    }
+  }
+
+  /** Whether `viewer` pinned no seat: it is sent the seat the director has on air, or had. */
+  private follows(viewer: Viewer): boolean {
+    return viewer.pin === 'regie' || viewer.pin === 'overview';
+  }
+
+  /**
+   * The seat whose view `viewer` is sent, by its player id: the one it pinned, else the one on
+   * air — and while the whole lab is on air, or pinned, the seat last on air (`ear`), by whose
+   * view the page keeps its sound.
+   */
+  private shownTo(viewer: Viewer): string {
+    if (this.follows(viewer)) {
+      return this.cut?.onAir ?? this.seats[this.ear].id;
+    }
+    return this.seats[viewer.pin === 'one' ? 0 : 1].id;
+  }
+
+  /** `viewer` is sent the view of the seat it is shown, as that seat last had it. */
+  private show(viewer: Viewer): void {
+    const id = this.shownTo(viewer);
+    const view = this.seats.find((seat) => seat.id === id)?.view ?? null;
+    if (view !== null) {
+      viewer.tell({ kind: 'demo-view', seat: id, view, at: Date.now() });
+    }
+  }
+
+  /**
+   * A seat's view as its line just carried it, on to everybody who is shown that seat — unless
+   * it is the view they were sent last: a room tells every seat of each step, and one seat in
+   * five of those sees nothing new.
+   */
+  private relay(view: PlayerView): void {
+    const text = JSON.stringify(view);
+    if (this.relayed.get(view.you.id) === text) {
+      return;
+    }
+    this.relayed.set(view.you.id, text);
+    for (const viewer of this.viewers.values()) {
+      if (this.shownTo(viewer) === view.you.id) {
+        viewer.tell({ kind: 'demo-view', seat: view.you.id, view, at: Date.now() });
+      }
     }
   }
 
@@ -246,14 +412,36 @@ export class DemoHost {
   }
 
   /**
-   * An audience connection on the demo room, as `Room.attachSpectator` gives one; refused with
-   * DEMO_FULL where DEMO_MAX_WATCHING watch already.
+   * An audience connection on the demo room, as `Room.attachSpectator` gives one — told at once
+   * what is on air and sent that seat's view — with its pin; refused with DEMO_FULL where
+   * DEMO_MAX_WATCHING watch already.
    */
-  watch(listener: (msg: ServerMessage) => void): ReturnType<Room['attachSpectator']> {
+  watch(listener: (msg: ServerMessage) => void): DemoWatch {
     if (this.live.watching >= DEMO_MAX_WATCHING) {
       throw new GameError(DEMO_FULL);
     }
-    return this.live.attachSpectator(listener);
+    const { spectatorId, detach } = this.live.attachSpectator(listener);
+    const viewer: Viewer = { tell: listener, pin: DEMO_PIN_DEFAULT };
+    const viewers = this.viewers;
+    const at = Date.now();
+    // The director looks before the newcomer is on the list: it is told once, right here.
+    this.directAt(at);
+    viewers.set(spectatorId, viewer);
+    this.show(viewer);
+    if (this.shot !== null) {
+      listener({ kind: 'demo-shot', shot: this.shot, at });
+    }
+    return {
+      spectatorId,
+      detach: () => {
+        viewers.delete(spectatorId);
+        detach();
+      },
+      pin: (pin) => {
+        viewer.pin = pin;
+        this.show(viewer);
+      },
+    };
   }
 
   /** `watching` watch now: the crew plays while anybody does, and DEMO_IDLE_MS longer. */

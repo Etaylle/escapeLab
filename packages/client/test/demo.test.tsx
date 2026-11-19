@@ -1,17 +1,14 @@
 import { readFileSync } from 'node:fs';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEMO_CODE, type SpectatorView } from '@escapelab/core';
-import { WORLD, offVoice } from '../../core/test/voice.js';
+import { DEMO_CODE } from '@escapelab/core';
 import { asksForDemo, readDemoLink, takeDemoLink } from '../src/demoLink.js';
 import { demoWay, leaveFor, pickOf } from '../src/screens/Join.js';
 import { MENU_LABELS, menuItems, opensPanel } from '../src/screens/MainMenu.js';
 import { KEEP_AWAKE_MS, keepAwake } from '../src/keepAwake.js';
-import { DEMO_LABEL, DEMO_LINE, SpectateScreen } from '../src/screens/Spectate.js';
 
 /**
- * „Demo" in the main menu, the demo's link and the line over the demo room's audience: the way
- * into the room the server plays itself (server demo/host.ts), with no name and no code.
+ * „Demo" in the main menu and the demo's link: the way into the room the server plays itself
+ * (server demo/host.ts), with no name and no code. The demo's own screen is demoScreen.test.tsx's.
  */
 
 const wipe = vi.hoisted(() => ({ doors: vi.fn(), shutter: vi.fn() }));
@@ -131,84 +128,6 @@ describe('the demo’s link', () => {
     const off = pageAt('/?demo=0');
     expect(takeDemoLink()).toBe(false);
     expect(off.replaced).toEqual(['/']);
-  });
-});
-
-/** The demo room's audience as the first of it finds it: the crew of two in its lobby. */
-const LOBBY = {
-  phase: 'lobby',
-  missionTitle: 'Blackout im Labor',
-  difficulty: 'normal',
-  currentPuzzleIndex: 0,
-  puzzleCount: 6,
-  penaltySeq: 0,
-  pausedAt: null,
-  startedAt: null,
-  deadlineAt: null,
-  lights: { out: false, outAt: null },
-  players: [
-    { id: 'a', name: 'HCW Bachelor', color: '#2dd4bf', connected: true },
-    { id: 'b', name: 'HCW Master', color: '#f472b6', connected: true },
-  ],
-  panels: [],
-  events: [],
-  away: [],
-  puzzle: null,
-  edgework: null,
-  map: null,
-} as unknown as SpectatorView;
-
-/** The audience's screen on `LOBBY`, of the demo room or of any other, on the site's page. */
-function audience(demo: boolean): string {
-  pageAt('/');
-  return renderToStaticMarkup(
-    <SpectateScreen
-      view={LOBBY}
-      finale={null}
-      positionsRef={{ current: { run: null, players: {} } }}
-      dronesRef={{ current: {} }}
-      pingsRef={{ current: [] }}
-      chatsRef={{ current: [] }}
-      leaveRoom={noop}
-      demo={demo}
-    />,
-  );
-}
-
-describe('the demo room’s audience', () => {
-  it('is labelled „Demo" beside the mission’s name, over a line of the plant’s', () => {
-    const html = audience(true);
-    expect(html).toContain(`Blackout im Labor<span class="demo-label">${DEMO_LABEL}</span></h1>`);
-    expect(html).toContain(`<p class="demo-line">${DEMO_LINE}</p>`);
-    expect(html).toContain('HCW Bachelor');
-    expect(html).toContain('HCW Master');
-    expect(html).toContain('Zuschauen beenden');
-    // The site's address beside it as a small QR code, to take the game along.
-    expect(html).toContain('<section class="panel demo-qr"><svg class="qr"');
-    expect(html).toContain('// Zum Mitnehmen</div><p class="qr-address">escapelab.test</p>');
-    // Any other room's audience has none of it.
-    expect(audience(false)).not.toContain('demo-');
-  });
-
-  it('says both at 14 px by the text size set, the line in the world’s voice', () => {
-    expect(DEMO_LABEL).toBe('Demo');
-    expect(DEMO_LINE).toBe('Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst.');
-    expect(offVoice([DEMO_LINE], WORLD)).toEqual([]);
-    const sheet = css('ui.css');
-    for (const selector of ['.demo-label', '.demo-line']) {
-      expect(ruleOf(sheet, selector)).toContain('font-size: calc(14px * var(--text-scale));');
-    }
-  });
-
-  it('keeps the label on a phone, upright or sideways, and leaves the line to wide windows', () => {
-    const sheet = css('ui.css');
-    const at = sheet.indexOf(
-      '@media (max-width: 560px), (orientation: landscape) and (max-height: 500px) {\n  .demo-line',
-    );
-    expect(at).toBeGreaterThan(0);
-    const narrow = sheet.slice(at, sheet.indexOf('\n}\n', at));
-    expect(narrow).toMatch(/\.demo-line \{\s*display: none;/);
-    expect(narrow).not.toContain('.demo-label');
   });
 });
 

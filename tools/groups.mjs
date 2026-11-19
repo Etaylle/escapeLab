@@ -164,9 +164,11 @@ export const GROUPS = [
     captures: [
       'demo',
       'menu-demo.png',
-      'demo-audience.png',
-      'demo-audience-phone.png',
-      'demo-audience-phone-932.png',
+      'demo-player.png',
+      'demo-overview.png',
+      'demo-switch.png',
+      'demo-phone.png',
+      'demo-phone-932.png',
     ],
   },
   {

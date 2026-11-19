@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import type { ClientMessage, PlayerView } from '@escapelab/core';
 import { typing } from '../../hooks.js';
+import { keysDeaf } from '../../input/deaf.js';
 import { usePause } from '../../menuLayer.js';
 import { addProbes } from '../../probes.js';
 import { traceRequested } from '../frameTrace.js';
@@ -189,13 +190,17 @@ function useOpeningSound(
  * Space skips the opening where it can be skipped; nothing else hears that press then. Under a
  * menu (menuLayer.ts `usePause`) Space is the menu's, and the opening plays on.
  */
-function useSkipKey(kept: React.MutableRefObject<{ cue: IntroCue | null }>, skip: () => void) {
+export function useSkipKey(
+  kept: React.MutableRefObject<{ cue: IntroCue | null }>,
+  skip: () => void,
+): void {
   const latest = useRef(skip);
   latest.current = skip;
   const covered = useRef(false);
   covered.current = usePause().open;
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      if (keysDeaf()) return;
       if (!skipKey(e, covered.current) || skipAt(kept.current.cue, Date.now()) === null) return;
       e.preventDefault();
       e.stopImmediatePropagation();

@@ -1361,16 +1361,98 @@ spends and the menu puts back.
 ## Die Demo: the room the server plays itself
 
 „Demo" in the main menu, after „Offene Runden", and the link `/?demo=1` (the stand's QR code) lead
-straight into the audience of the demo room: no name, no account, no code. The link is read once as
-the page comes up and taken off the address at once (`client/src/demoLink.ts`), so that no invite
-link copies it and a reload after „Zuschauen beenden" finds the menu. A phone held sideways keeps
-the item in its menu's column — seven fit 390 px, and there the editor, „QR-Code" and
-„Einstellungen" go instead. The audience is the one every room has, with the label „Demo" beside
-the mission's name — on every window, a phone's too — and on a wide window one line under it,
-„Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst."; the crew stands along the foot as
-always: „HCW Bachelor" and „HCW Master" (Uros's names for the two), each with what it is doing (am
-Pult A, liest, hält die Platte, trägt die Sicherung). Under a finger the foot's two ways, „Crew
-mithören" and „Zuschauen beenden", are 44 px tall. Whoever joins mid-run sees the run as it stands.
+straight onto the demo's screen: no name, no account, no code. The link is read once as the page
+comes up and taken off the address at once (`client/src/demoLink.ts`), so that no invite link
+copies it and a reload after „Zuschauen beenden" finds the menu. A phone held sideways keeps the
+item in its menu's column — seven fit 390 px, and there the editor, „QR-Code" and „Einstellungen"
+go instead.
+
+**What a visitor sees** (`client/src/screens/Demo.tsx`) is the game as one of the crew has it:
+that seat's own screen — the world round its figure, the goal line, the clock, the station's panel
+while it works a console, the book or the Richtlinie while it reads — and not the lab from above.
+The opening plays as a player gets it, and the Auswertung after the run. Under the picture a line
+names who is on air and what they are doing: „HCW Bachelor · liest: Betriebsbuch", „HCW Master · am
+Pult B", „unterwegs", „wartet", „bringt ein Teil", „liest die Laborkennung", „hält die Tür offen",
+„Schichtbeginn", „auf dem Weg zur Luke" — and „Übersicht · die ganze Anlage" for the lab from
+above. The label „Demo" stands in that line on every window. A window wide enough (over 1100 px,
+and 600 high) has a column beside the picture: „Vorführbetrieb: Die Anlage fährt diesen Einsatz
+selbst." and the site's address as a QR code, „Zum Mitnehmen" (146 px a side). Whoever joins
+mid-run sees the run as it stands.
+
+**The director** (`server/src/demo/director.ts`) is what „Regie" follows: it decides what is on
+air, on the server, the same for every window that chose it. It is a
+pure function of how the run stands, what each seat is doing as its script says it
+(`DemoCrew.doing`: idle, intro, walk, carry, sign, plate, read, operate, escape) and who made the
+last move, and it holds the picture on air for a minimum: a seat 6 s, the whole lab 5 s. Its rules,
+the first that holds: the lobby is the whole lab's; the opening and the Auswertung are the first
+seat's, cut to at once; the way out and the 5 s after a station's solve are the whole lab's;
+whoever reads at a source or works a console is on air — at two consoles whoever made the last
+move, and where one reads beside the other's console the reader, until a move holds the console
+for 9 s —; a walk while drones fly is the whole lab's; any other time is the first seat's. Over the
+three draws' runs (seeds 12, 56, 93) that makes 34, 27 and 38 cuts, the whole lab on air 21, 25 and
+21 % of the run, and every station that has a source is seen read for 15 s or more and worked for
+29 s or more. Reading and working at once happens at the Funkpult alone — every other station of
+Blackout has two consoles —, so there the cut goes from the pages to the console and stays.
+
+**A seat's screen is read-only.** The demo's audience is the only one ever sent a seat's own view
+(`demo-view`): its crew are the server's own machines, and no person plays by what they see. The
+view is the host's to send, over the lines its own seats hold — `Room` has no way to send an
+audience a seat's view, and a test of a crew's room finds none on its audience's line whatever it
+asks. On the page the player's screens are used as they are, told that they watch
+(`GameScreen` `watch`, `GameWorld` `watched`): the figure stands where the room has that seat, a
+moment ago as every other figure is drawn (`sim.ts` `watchSelf`); the world listens for no key,
+no finger and no controller and streams no position; the screen is `inert` and hands everything in
+it a `send` that sends nothing; the notepad's and the put-down keys and the opening's skip ask
+`keysDeaf()` (`input/deaf.ts`) and do nothing; and the game's own controls — the pad, E, the chat,
+the ways to step back or put down, the strip's buttons, the book's arrows — are not shown. What a
+console's panel shows of its keys is the console, as the seat has it. Esc opens the page's menu,
+as over any audience's screen. Poked with the game's keys and a click, the page sends nothing (the
+walkthrough's demo drill does it), and the door refuses an audience everything anyway.
+
+**What the crew says.** The crew are machines and say nothing. Where a crew of people would call
+across what the book says, the audience reads it as a subtitle at the picture's foot for nine
+seconds: whoever has just read a station's rules passes on a sentence of the pages that lay open on
+its own view, word for word — the first note under „Aus der Werkstatt", or the manual's first rule
+where it has none (`server/src/demo/caption.ts`). In Blackout: „Das Terminal zählt nicht mit: Am
+Skriptpult verrät nur das Licht im Bodenkanal, wie weit der Impuls ist." (Anlaufsteuerung), „Ist
+eines der beiden Pulte unbesetzt, hält die Anlage die Welle an." (Paketfilter), „Vor allem anderen
+den Dienst mit E50 vom Strom nehmen: Ein Start steckt einen zweiten Dienst an." (Rechnernetz), and
+the Wechselplatz's: „Seit dem Umbau zeigt die Anzeige ab Stufe 3 die Zeichen nur einzeln und kurz,
+ab Stufe 4 farblos (Kondensator, nie ersetzt): merken oder notieren.", „Passt kein Wort der
+Tabelle, ist ein Zeichen verlesen: nach der nächsten langen Pause von vorn mitschreiben." or „Nach
+jedem Schnitt löscht das Prüfpult seine Messungen: vor dem nächsten Schnitt alle ganzen Kabel neu
+messen." A manual is rules, never an instance's answer, so the sentence is true of every run. The
+two switches the whole crew throws (Notlicht, Reaktorstart) have no source, and nothing is said at
+them. What a solver did with a rule is not said: `solve()` gives moves, not reasons.
+
+**One perspective, and the viewer picks** — as a shooter's spectator mode does. Whoever comes sees
+the first seat's own screen, from the opening to the Auswertung. A switcher in the line, always
+there, offers four pictures, each button 44 px: „HCW Bachelor" · „HCW Master" (the seats, by the
+names of who sits on them) · „Übersicht" · „Regie" (the director's cut between the three). On a
+laptop ← and → step through them, round and round, and 1 to 4 pick one. The choice is this
+window's alone, kept for the session (`sessionStorage`) — through the loop's next run and a line
+lost — and told the server on every line that comes up (`demo-pin`), which sends a window the view
+of the one seat it is shown, never both. A crew's room refuses the ask: „Die Bildregie gibt es nur
+in der Vorführung."
+
+**A change of picture** — the viewer's, or the director's — is a cross-fade of 400 ms: the picture
+that goes is kept on a canvas over the one that comes and fades out; whoever asked for less motion
+gets a plain swap. The seat's screen is never taken down for a cut: from seat to seat its view is
+swapped under it — the camera stands on the other figure at once, and what that seat had found
+before is no news on this screen —, and the whole lab is a picture laid over it (`GameWorld`
+`silent`), under which the seat's world goes on without drawing (`covered`).
+
+**Sound** is the sound of the seat on air, as its player would hear it: the beds of the rooms round
+it, steps, doors, the radio's lines, alarms, the music. It follows a cut from seat to seat because
+the world that makes it stays. Under the whole lab the lab is heard on from where the seat last on
+air stands (`DemoShot.ear`, whose view keeps coming for that): no cut stops the music or starts it
+anew, and no line of the radio is said twice — the lab's picture makes no sound of its own and
+stops none as it goes. The first tap or key enables the sound, as everywhere.
+
+**On a phone** the demo has the whole window, upright and sideways: the top bar goes, its sound
+switch stands in the line, the way out is its icon, so that the seat's screen has what a player's
+has — at 420×760 a picture 630 px high, at 932×430 one 352 px high. Upright the line is two rows:
+who is on air, then the four pictures across the window.
 
 **It keeps its server awake, and comes back by itself.** A page that only watches sends nothing
 over HTTP — its socket carries everything — and a host that puts an instance to sleep counts
@@ -1379,8 +1461,9 @@ requests (Render's free plan: 15 minutes without one). So the demo's audience as
 Where the server restarts or the line drops, the page's line comes back as every page's does —
 again after 1 s, 2 s, 4 s, at most 10 s apart (`line.ts`) — and asks for the demo room's audience
 again, with no reload: killed and started again under a watching page, the server had the page back
-in the audience 3.4 s after it was up (the walkthrough's demo drill does it in every Systemcheck
-run that owns its server).
+on the demo 3.6 s after it was up (the walkthrough's demo drill does it in every Systemcheck run
+that owns its server). Whoever comes — again, or for the first time — is told at once what is on
+air and sent that seat's view; a pin kept for the session is told the new line again.
 
 **The room** (`server/src/demo/host.ts`) has the code `DEMO` (core `DEMO_CODE`; no room a server
 opens has an O in its code) and is none of the manager's rooms: no list shows it, nobody joins it
@@ -1404,8 +1487,9 @@ demo is simply there again: nothing of it is kept.
 **What keeps it going.** A run that is lost — by its clock, or by its alarms — is counted as lost
 and the next follows after the Auswertung as after a win. A run that gets no further for five
 minutes (no station solved, no hatch opened — a healthy crew's longest stretch is 157 s, 191 s
-on hanging lines), or whose crew has started over thirty times since it last got on, is given up by its host: lost as by its clock (`Room.runOut`), said once in the log, and the next
-seed follows — without that a stuck crew would stand for the rest of the sixteen minutes. Nothing
+on hanging lines), or whose crew has started over thirty times since it last got on, is given up
+by its host: lost as by its clock (`Room.runOut`), said once in the log, and the next seed
+follows — without that a stuck crew would stand for the rest of the sixteen minutes. Nothing
 the audience sends reaches the room: an audience connection may watch, listen in on a crew and
 leave, and every other word of a seat's — a start, a rematch, the way back to the lobby, a move, a
 ping, a quick chat — is refused at the door („Das Publikum schaut zu: Geschaltet wird nur von einem
@@ -1413,10 +1497,9 @@ Platz der Crew."), in every room. A start, a rematch or a way back the room refu
 of it, and rolls no seed. A socket that asks for the audience it is in already goes on watching,
 nobody told anything; one that joins audiences more than twelve times a minute is told „Nicht so
 schnell — gleich noch einmal.", and the log says a refusal once a socket, twenty different ones
-of a socket at the most. In the demo „Crew
-mithören" is not offered: nobody speaks there.
+of a socket at the most. The demo offers no „Crew mithören": nobody speaks there.
 
-**On a phone** the audience's page — the demo's and every room's — scrolls down when held upright:
+**An audience's page on a phone** — every room's but the demo's — scrolls down when held upright:
 the world in the lab's own shape (62 % of the window's width high), then the panels one under the
 other, each as wide as the window, nothing scrolling sideways. Held sideways the head is one line,
 the world takes the height under it and the panels stand beside it in a column of their own. A name
@@ -1460,12 +1543,16 @@ time the three seeds of the draws (12, 56, 93) came to 410, 343 and 380 s, on fa
 not come near; a server that hangs for seconds may cost it a sighting.
 
 **What watching costs.** The server's process on an M4, measured over two and a half minutes each
-(2026-11-19): with nobody watching 45 MB and 0.05 % of a core — the demo room in its lobby runs no
-timer —, with three watching 58 MB and 0.8 %, with sixty 89 MB and 3.0 %, sending 654 kB a second
-in all. A small hosted instance's share of a slower core is a tenth of one: three watching are
-nothing to it, sixty are about what it has. One of the audience is sent some 0.5 views a second of
-12 kB and 7.5 position messages of 0.5 kB — 6 to 10 kB a second, about 4 MB a run — so sixty take
-about 0.5 MB a second out of the server: the line, not the processor, is what an audience costs.
+(2026-11-19, with the seat's view on the feed): with three watching 79 MB and 1.4 % of a core, with
+sixty 96 MB and 3.2 %, sending 1.0 MB a second in all, with a hundred and fifty — the cap — 83 MB
+(115 at its peak) and 6.4 %, sending 2.7 MB a second. Before the seat's view sixty cost 89 MB,
+3.0 % and 654 kB a second: the processor hardly notices, the line carries half as much again. One
+of the audience is sent 16 to 18 kB a second: the audience's view (6 to 7 kB — some 0.5 views a
+second of 12 kB), the view of one seat (6.6 to 7.5 kB; one in five of a seat's views shows nothing
+new and is not sent), the positions (1.4 to 4.3 kB) and the word of what is on air (0.05 kB). A
+small hosted instance's share of a slower core is a tenth of one: sixty watching are about what it
+has, and a hundred and fifty take 2.7 MB a second out of its line — the line, not the processor,
+is what an audience costs.
 
 ## QR-Codes: onto another device
 

@@ -1,11 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SpectatorView } from '@escapelab/core';
+import { DemoScreen } from '../src/screens/Demo.js';
 import { SpectateScreen } from '../src/screens/Spectate.js';
 
 /**
- * The audience's screen keeps the server awake while it shows the demo room, and only then
- * (keepAwake.ts): its effects run here as the page runs them, each one's cleanup kept.
+ * The demo room's own screen keeps the server awake for as long as it stands (keepAwake.ts), and
+ * no other audience's does: its effects run here as the page runs them, each one's cleanup kept.
  */
 
 const awake = vi.hoisted(() => ({ kept: 0, stopped: 0, cleanups: [] as (() => void)[] }));
@@ -51,20 +52,34 @@ const LOBBY = {
   map: null,
 } as unknown as SpectatorView;
 
-/** The audience's screen shown, of the demo room or another; then taken down again. */
+/** What every audience's screen is handed. */
+const WORLD = {
+  view: LOBBY,
+  finale: null,
+  positionsRef: { current: { run: null, players: {} } },
+  dronesRef: { current: {} },
+  pingsRef: { current: [] },
+  chatsRef: { current: [] },
+  leaveRoom: noop,
+};
+
+/** The audience's screen shown, the demo room's own or another room's; then taken down again. */
 function shown(demo: boolean): void {
-  vi.stubGlobal('window', { location: { origin: 'https://escapelab.test', pathname: '/' } });
+  const location = { origin: 'https://escapelab.test', pathname: '/' };
+  vi.stubGlobal('window', { location, addEventListener: noop, removeEventListener: noop });
+  vi.stubGlobal('sessionStorage', { getItem: () => null, setItem: noop });
   renderToStaticMarkup(
-    <SpectateScreen
-      view={LOBBY}
-      finale={null}
-      positionsRef={{ current: { run: null, players: {} } }}
-      dronesRef={{ current: {} }}
-      pingsRef={{ current: [] }}
-      chatsRef={{ current: [] }}
-      leaveRoom={noop}
-      demo={demo}
-    />,
+    demo ? (
+      <DemoScreen
+        {...WORLD}
+        feed={{ shot: null, views: {} }}
+        send={noop}
+        listen={() => noop}
+        line={{ status: 'open', retry: null, wake: noop, giveUp: noop }}
+      />
+    ) : (
+      <SpectateScreen {...WORLD} />
+    ),
   );
   awake.cleanups.splice(0).forEach((cleanup) => cleanup());
 }

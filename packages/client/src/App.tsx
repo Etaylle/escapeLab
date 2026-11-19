@@ -22,6 +22,7 @@ import {
   type Difficulty,
   type MissionInfo,
   type MissionStats,
+  type SpectatorView,
 } from '@escapelab/core';
 import { firstDifficulty, hasWon, useWonMark } from './firstRun.js';
 import { useHistoryGuard } from './historyGuard.js';
@@ -78,6 +79,7 @@ import { createRoomMessage, pickedMission, usePicked } from './screens/MenuPanel
 import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
 import type { GameLine } from './screens/Line.js';
+import { DemoScreen } from './screens/Demo.js';
 import { EndScreen } from './screens/End.js';
 import { MenuLayers, type RoomCrew, type RoomMission } from './screens/MenuLayers.js';
 import { SettingsPanel, type SettingsTab } from './screens/Settings.js';
@@ -516,6 +518,28 @@ function lineOf(conn: Connection): GameLine {
 }
 
 /**
+ * The audience's screen for the room this connection watches: the demo room's own (Demo.tsx),
+ * with its feed, or any other room's (Spectate.tsx).
+ */
+function Audience(props: { view: SpectatorView; conn: Connection; finale: Finale | null }) {
+  const { view, conn, finale } = props;
+  const world = {
+    view,
+    finale,
+    positionsRef: conn.positions,
+    dronesRef: conn.drones,
+    pingsRef: conn.pings,
+    chatsRef: conn.chats,
+    leaveRoom: conn.leaveRoom,
+  };
+  if (conn.roomCode !== DEMO_CODE) {
+    return <SpectateScreen {...world} />;
+  }
+  const { demo: feed, send, listen } = conn;
+  return <DemoScreen {...world} feed={feed} send={send} listen={listen} line={lineOf(conn)} />;
+}
+
+/**
  * The screen for where this connection is: watching, off any room, or in one
  * by its phase. A run that is over stays on the game screen while the world
  * plays its end (world/finale.ts) — the same screen, so that the world goes on
@@ -524,18 +548,7 @@ function lineOf(conn: Connection): GameLine {
 export function Screens(props: ScreenProps) {
   const { conn, finale } = props;
   if (conn.spectatorView !== null) {
-    return (
-      <SpectateScreen
-        view={conn.spectatorView}
-        finale={finale}
-        positionsRef={conn.positions}
-        dronesRef={conn.drones}
-        pingsRef={conn.pings}
-        chatsRef={conn.chats}
-        leaveRoom={conn.leaveRoom}
-        demo={conn.roomCode === DEMO_CODE}
-      />
-    );
+    return <Audience view={conn.spectatorView} conn={conn} finale={finale} />;
   }
   if (conn.view === null) {
     return <OffRoom {...props} />;
@@ -607,11 +620,22 @@ function useStage(conn: Connection, finale: Finale | null): boolean {
   const playing =
     (conn.view?.phase === 'playing' && conn.view.map !== null) || (conn.view !== null && ending);
   useRunScreen(playing);
-  return (
-    conn.view?.phase === 'lobby' ||
-    playing ||
-    (conn.spectatorView !== null && (conn.spectatorView.map !== null || ending))
-  );
+  return conn.view?.phase === 'lobby' || playing || audienceStage(conn, ending);
+}
+
+/**
+ * Whether the window belongs to the room an audience watches: a run on, or its end playing —
+ * and the demo room's always, whose screen keeps its line under the picture through the lobby
+ * and the Auswertung too.
+ */
+export function audienceStage(
+  conn: Pick<Connection, 'spectatorView' | 'roomCode'>,
+  ending: boolean,
+): boolean {
+  if (conn.spectatorView === null) {
+    return false;
+  }
+  return conn.roomCode === DEMO_CODE || conn.spectatorView.map !== null || ending;
 }
 
 /**
@@ -962,7 +986,7 @@ function runningOf(conn: Connection) {
  * the lobby names its own as its headline, so naming it twice there would be noise —, the seed a
  * tester pinned the lobby to (?seed=), the way back to the editor, and off any room the account.
  */
-function AppBar(props: {
+export function AppBar(props: {
   conn: Connection;
   layer: MenuLayer;
   menus: ShutteredMenus;

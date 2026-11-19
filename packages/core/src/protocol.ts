@@ -76,6 +76,52 @@ export type IceServer = z.infer<typeof iceServerSchema>;
  */
 export const DEMO_CODE = 'DEMO';
 
+/**
+ * What one of the demo crew is doing, as its script has it (server demo/crew.ts): the director
+ * cuts by it, and the audience's lower third says it.
+ */
+export const DEMO_DOINGS = [
+  'idle',
+  'intro',
+  'walk',
+  'carry',
+  'sign',
+  'plate',
+  'read',
+  'operate',
+  'escape',
+] as const;
+
+export interface DemoDoing {
+  what: (typeof DEMO_DOINGS)[number];
+  /** the source read at (`read`), by its id; null for anything else */
+  sourceId: string | null;
+}
+
+/**
+ * What a viewer of the demo may have on its own screen, in the order its switcher offers them:
+ * the first seat's own view (what everybody starts on), the second's, the whole lab, or the
+ * director's cut between the three.
+ */
+export const DEMO_PINS = ['one', 'two', 'overview', 'regie'] as const;
+export type DemoPin = (typeof DEMO_PINS)[number];
+/** What a viewer of the demo is shown until it chooses otherwise: the first seat's own view. */
+export const DEMO_PIN_DEFAULT: DemoPin = 'one';
+
+/**
+ * What the demo has on air, the same for everybody who watches: the seat whose own view the
+ * director shows (`onAir`, a player id) or the whole lab (null), what each of the crew is doing,
+ * and what one of them tells the other, if anything, to be read under the picture. While the
+ * whole lab is on air the view of one seat keeps coming all the same (`ear`, the seat last on
+ * air): the lab is heard from where that seat stands.
+ */
+export interface DemoShot {
+  onAir: string | null;
+  ear: string;
+  doing: Record<string, DemoDoing>;
+  caption: { by: string; text: string } | null;
+}
+
 /** The largest seed a room can be pinned to: a seed is 32 bits wide, as the PRNG takes it. */
 export const SEED_MAX = 0xffff_ffff;
 
@@ -165,6 +211,11 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     color: crewColorSchema.optional(),
   }),
   z.object({ kind: z.literal('spectate'), code: z.string().min(1).max(10) }),
+  /**
+   * what this viewer of the demo room wants on its own screen (`DEMO_PINS`): the director's cut
+   * by default; answered with the view of the seat pinned. Refused in any other room.
+   */
+  z.object({ kind: z.literal('demo-pin'), pin: z.enum(DEMO_PINS) }),
   z.object({ kind: z.literal('list-rooms') }),
   /**
    * back onto the seat the pass holds in the room, from whatever socket this is, with the newest
@@ -580,6 +631,17 @@ export type ServerMessage =
   | { kind: 'takeover-allowed'; code: string }
   | { kind: 'view'; view: PlayerView; at: number }
   | { kind: 'spectator-view'; view: SpectatorView; code: string; at: number }
+  /**
+   * the demo room alone, to its audience: what is on air (`DemoShot`), on every cut and whenever
+   * the crew does something else
+   */
+  | { kind: 'demo-shot'; shot: DemoShot; at: number }
+  /**
+   * the demo room alone, to its audience: the own view of the seat this connection is shown or
+   * hears the lab by — the one on air (`DemoShot.ear` while none is), or the one it pinned. The demo's crew are the server's own machines: no
+   * person's view is given away by it, and no other room ever sends one (server demo/host.ts).
+   */
+  | { kind: 'demo-view'; seat: string; view: PlayerView; at: number }
   /**
    * how many audience connections watch room `code` now: told everyone in it as one comes or
    * goes, and a seat coming onto its line while any watch

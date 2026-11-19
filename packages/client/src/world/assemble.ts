@@ -61,6 +61,8 @@ export interface FrameSource {
   kit: RenderKit;
   sim: Sim;
   spectator: boolean;
+  /** a seat is watched on this screen, not played (`Sim.watching`): E does nothing here */
+  watched?: boolean;
   /** same condition the stylesheet uses to show the on-screen pad */
   touchPad: MediaQueryList;
   /**
@@ -246,7 +248,7 @@ function aim(source: FrameSource, map: WorldMap, dpr: number, pull: number, now:
   const s = near + (wholeZoom(map, w, h) - near) * pull;
   const top = sim.topCss * dpr * (1 - pull);
   // On a touch screen the avatar stands clear above the pad and the buttons in the corners.
-  const touch = source.touchPad.matches && !spectator;
+  const touch = source.touchPad.matches && !spectator && source.watched !== true;
   const lift = touch ? liftAbove(source.insets.bottom * dpr, h, top, s) * (1 - pull) : 0;
   sim.draw = clampCamera(map, pulledBack(sim, map, pull), { scale: s, w, h, top, lift });
   sim.scale = s;
@@ -478,7 +480,7 @@ function overlaysOf(
   const danger = dangerMarker();
   const targets = markerTargets(map, view.you.id, sim.self, crew);
   const markers = danger === null ? targets : [...targets, danger];
-  const action = locked
+  const action = locked || source.watched === true
     ? null
     : contextAction(
         map,

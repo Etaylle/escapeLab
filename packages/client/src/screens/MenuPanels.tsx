@@ -456,9 +456,12 @@ function TakeoverWait({ takeover }: { takeover: Takeover }) {
   );
 }
 
-/** A room's code as typed: in capitals, nothing but its letters and digits. */
+/** The longest a room's code is taken, typed or off an invite: what the line takes of one. */
+export const CODE_MAX = 10;
+
+/** A room's code as typed: in capitals, nothing but its letters and digits, CODE_MAX at most. */
 export function codeOf(typed: string): string {
-  return typed.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return typed.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_MAX);
 }
 
 /** An invite's code as the page took it, and whether a menu has come up on it already. */
@@ -530,7 +533,7 @@ function CodeField({ code, onCode }: { code: string; onCode: (code: string) => v
       className="join-code"
       value={code}
       onChange={(e) => onCode(codeOf(e.target.value))}
-      maxLength={10}
+      maxLength={CODE_MAX}
       placeholder="z. B. QX7R"
       aria-label="Raumcode"
       name="room"

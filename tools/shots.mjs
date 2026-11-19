@@ -18126,39 +18126,64 @@ async function captureLobbyQr(page, code) {
 // ── the demo drill: the room the server plays itself (server demo/host.ts) ──────────────────
 //
 // In a Systemcheck run, on pages of its own: a laptop's menu with „Demo" in the focus
-// (menu-demo.png); the item pressed leads into the demo room's audience with no name and no
-// code, and once both of its crew stand at a console demo-audience.png is taken — the label
-// „Demo" beside the mission's name, the line that the plant plays by itself, both of the crew
-// along the foot by name, what each is doing. Then a phone that asks for less motion comes by the
-// demo's link, /?demo=1: straight into the audience, the link gone from the address
-// (demo-audience-phone.png), turned sideways (demo-audience-phone-932.png) — the label there, the
-// line left to wide windows — and „Zuschauen beenden" leads back to the menu. Last, where the run
-// owns its server, the server is killed and started again under the laptop's page: the page is
-// back in the demo's audience by itself, never loaded anew. The run fails where any of it is not
-// so.
+// (menu-demo.png); the item pressed leads into the demo room's own screen with no name and no
+// code. Once one of its crew works a console, demo-player.png is taken: that seat's own screen —
+// the game as a player has it, read-only — over the line that names who is on air, the choice of
+// picture and the way out, the demo's line and the site's QR code beside it. The page is then
+// poked as a player would play — keys, a click into the picture — and sends nothing for it.
+// „Übersicht" picks the whole lab (demo-overview.png), „HCW Master" the second seat, the cut held
+// halfway through its fade (demo-switch.png); the music that plays under the first picture plays on
+// under each. Then a phone that asks for less motion comes by the demo's link, /?demo=1:
+// straight onto the demo's screen, the link gone from the address (demo-phone.png), turned
+// sideways (demo-phone-932.png) — the whole window the demo's, no top bar — and the way out leads
+// back to the menu. Last, where the run owns its server, the server is killed and started again
+// under the laptop's page: the page is back on the demo by itself, never loaded anew. The run
+// fails where any of it is not so.
 
-/** The label and the line of the demo room's audience (client screens/Spectate.tsx). */
+/** The demo's label, its line and what it says of the whole lab (client screens/Demo.tsx). */
 const DEMO_LABEL = 'DEMO';
 const DEMO_LINE = 'Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst.';
+const DEMO_OVERVIEW = 'Übersicht · die ganze Anlage';
+/** The pictures a viewer may pin, as the buttons name them. */
+const DEMO_PINS = ['HCW Bachelor', 'HCW Master', 'Übersicht', 'Regie'];
 /** The demo crew's names (server demo/host.ts `DEMO_NAMES`). */
 const DEMO_NAMES = ['HCW Bachelor', 'HCW Master'];
 
 /** The smallest the demo's words may be, and the smallest a finger's target, CSS px. */
 const DEMO_TEXT_PX = 14;
 const DEMO_TARGET_PX = 44;
-/** How long the demo's page may take to be back in the audience after the server's restart, ms. */
+/** How long the demo's page may take to be back on the demo after the server's restart, ms. */
 const DEMO_BACK_MS = 45_000;
+/** What a page that only watches may send while it is poked: the clock's asks and answers. */
+const DEMO_MAY_SEND = new Set(['clock', 'tock']);
 
-/** What the demo room's audience shows, read in the page (whole, as page.evaluate takes it). */
-function demoAudienceShown() {
+/** The game's own controls, none of which a seat watched shows (client styles/demo.css). */
+const DEMO_CONTROLS = [
+  '.put-down',
+  '.device-step-back',
+  '.device-tabs',
+  '.hud-info',
+  '.book-nav button',
+  '.world-pad',
+  '.world-interact',
+  '.world-sprint',
+  '.world-chat-toggle',
+  '.world-drop',
+].join(', ');
+
+/**
+ * What the demo's screen shows, read in the page (whole, as page.evaluate takes it); `controls`
+ * selects the game's own controls.
+ */
+function demoShown(controls) {
   const doc = document.documentElement;
   const view = globalThis;
-  const nothing = { text: null, px: 0, inside: false };
+  const boxOf = (element) => element?.getBoundingClientRect() ?? { width: 0, height: 0 };
   const said = (selector) => {
     const element = document.querySelector(selector);
-    const box = element === null ? { width: 0, height: 0 } : element.getBoundingClientRect();
+    const box = boxOf(element);
     if (box.width * box.height === 0) {
-      return nothing;
+      return { text: null, px: 0, inside: false };
     }
     return {
       text: element.innerText.trim(),
@@ -18166,63 +18191,79 @@ function demoAudienceShown() {
       inside: [box.left, box.top, doc.clientWidth + 1 - box.right].every((gap) => gap >= 0),
     };
   };
-  const foot = [...document.querySelectorAll('.spectate-foot .players li')];
+  const sizeOf = (element) => {
+    const box = boxOf(element);
+    return [Math.round(box.width), Math.round(box.height)];
+  };
+  const seen = (element) => element.getClientRects().length > 0;
+  const picture = document.querySelector('.demo-picture');
   return {
-    label: said('.demo-label'),
+    lab: document.querySelector('.demo--lab') !== null,
+    label: said('.demo-third .demo-label'),
+    onAir: said('.demo-onair'),
     line: said('.demo-line'),
-    crew: foot.map((li) => li.textContent.trim()),
-    crewInside: foot.every((li) => li.getBoundingClientRect().right <= doc.clientWidth + 1),
-    atConsole: foot.filter((li) => li.querySelector('.presence-pult') !== null).length,
-    ways: [...document.querySelectorAll('.spectate-foot button.link')].map((button) =>
-      Math.round(button.getBoundingClientRect().height),
-    ),
+    pins: [...document.querySelectorAll('.demo-pin')].map((pin) => ({
+      text: pin.innerText.trim(),
+      pressed: pin.getAttribute('aria-pressed') === 'true',
+      size: sizeOf(pin),
+      px: Number.parseFloat(view.getComputedStyle(pin).fontSize),
+    })),
+    leave: sizeOf(document.querySelector('.demo-leave')),
+    picture: sizeOf(picture),
+    window: [doc.clientWidth, doc.clientHeight],
+    topbar: seen(document.querySelector('.topbar')),
+    // The seat's screen takes no finger, and shows none of the game's own controls: what a
+    // console's panel shows of its keys is the console, and inert with the rest.
+    inert: document.querySelector('.demo-seat .game')?.inert ?? null,
+    controls: [...document.querySelectorAll(controls)].filter(seen).length,
+    fade: Number(view.getComputedStyle(document.querySelector('.demo-fade')).opacity),
     sideways: doc.scrollWidth - doc.clientWidth,
     address: view.location.search,
-    // The world's box, and whether any panel beside or under it runs or scrolls out sideways.
-    world: (() => {
-      const box = document.querySelector('.spectate-world')?.getBoundingClientRect();
-      return box === undefined ? [0, 0] : [Math.round(box.width), Math.round(box.height)];
-    })(),
-    panelsOut: [...document.querySelectorAll('.spectate-panels .panel')]
-      .filter((panel) => panel.getClientRects().length > 0)
-      .some((panel) => {
-        const box = panel.getBoundingClientRect();
-        return box.left < 0 || box.right > doc.clientWidth + 1;
-      }),
-    // The site's small QR code beside the run's report: its side, 0 where the window shows none.
-    qr: Math.round(document.querySelector('.demo-qr svg.qr')?.getBoundingClientRect().width ?? 0),
+    qr: Math.round(boxOf(document.querySelector('.demo-qr svg.qr')).width),
   };
 }
 
-/**
- * What is wrong with the demo room's audience as `shown` has it (`demoAudienceShown`): on a
- * phone (`phone`) its ways out and in have to be a fingertip tall, and its head carries the
- * label alone; a wide window reads the line as well.
- */
-function demoFaults(shown, phone) {
-  const { label } = shown;
-  const named = DEMO_NAMES.every((name, i) => shown.crew[i]?.startsWith(name) === true);
-  return wrongOf([
-    ...(phone ? demoPhoneFaults(shown) : demoWideFaults(shown)),
-    // „Zuschauen beenden" alone: nobody speaks in the demo, so nothing offers to listen in.
-    [shown.ways.length !== 1, `${shown.ways.length} ways along the foot, not the way out alone`],
+/** What is wrong with the demo's line under the picture as `shown` has it, each with its words. */
+function demoLineFaults(shown) {
+  const { label, onAir, pins, leave } = shown;
+  const small = pins.filter((pin) => Math.min(...pin.size) < DEMO_TARGET_PX);
+  const pressed = pins.filter((pin) => pin.pressed);
+  return [
     [label.text !== DEMO_LABEL, `the label reads „${label.text}"`],
     [label.px < DEMO_TEXT_PX || !label.inside, `the label at ${label.px} px, in: ${label.inside}`],
-    [shown.panelsOut, 'a panel runs out of the window sideways'],
-    [!named || !shown.crewInside, `the crew along the foot: ${shown.crew.join(' · ')}`],
+    [onAir.px < DEMO_TEXT_PX || !onAir.inside, `who is on air at ${onAir.px} px`],
+    [pins.map((pin) => pin.text).join('|') !== DEMO_PINS.join('|'), 'the pictures to pin differ'],
+    [small.length > 0, `pins ${small.map((pin) => pin.size.join('x')).join(', ')} px`],
+    [pins.some((pin) => pin.px < DEMO_TEXT_PX), 'a pin’s word is under 14 px'],
+    [pressed.length !== 1, `${pressed.length} pins pressed`],
+    [Math.min(...leave) < DEMO_TARGET_PX, `the way out is ${leave.join('x')} px`],
+  ];
+}
+
+/**
+ * What is wrong with the demo's screen as `shown` has it (`demoShown`): the line under the
+ * picture, the seat's screen inert and without a control, nothing running out sideways, the
+ * address clean; on a phone the whole window is the demo's, a wide window reads its line and QR
+ * code beside the picture.
+ */
+function demoFaults(shown, phone) {
+  const tall = shown.picture[1] / shown.window[1];
+  return wrongOf([
+    ...demoLineFaults(shown),
+    ...(phone ? demoPhoneFaults(shown, tall) : demoWideFaults(shown)),
+    [shown.inert === false, 'the seat’s screen takes a finger'],
+    [shown.controls > 0, `${shown.controls} controls show in the picture`],
     [shown.sideways > 1, `the page runs ${shown.sideways} px out sideways`],
     [shown.address.includes('demo'), `the address kept „${shown.address}"`],
   ]);
 }
 
-/** What may be wrong with the demo room's audience on a phone alone, each with its words. */
-function demoPhoneFaults(shown) {
-  const small = shown.ways.filter((height) => height < DEMO_TARGET_PX);
+/** What may be wrong with the demo's screen on a phone alone, each with its words. */
+function demoPhoneFaults(shown, tall) {
   return [
-    [small.length > 0, `ways along the foot ${small.join(', ')} px tall`],
-    [shown.line.text !== null, 'the line crowds the phone’s head'],
-    [shown.world[1] < 200, `the world is ${shown.world.join('x')} px`],
-    [shown.qr !== 0, `the site’s QR code is ${shown.qr} px a side`],
+    [shown.topbar, 'the top bar stands over the demo on a phone'],
+    [tall < 0.7, `the picture is ${shown.picture.join('x')} px of ${shown.window.join('x')}`],
+    [shown.qr !== 0 || shown.line.text !== null, 'the line or the QR code crowd the phone'],
   ];
 }
 
@@ -18235,36 +18276,50 @@ function demoWideFaults({ line, qr }) {
   ];
 }
 
-/** `shot` of the demo room's audience on `page`, a phone's or not, logged and judged. */
-async function demoAudienceShot(page, shot, size, phone = false) {
+/**
+ * `shot` of the demo's screen on `page`, a phone's or not, logged and judged; `more(shown)` adds
+ * what this picture has to show beside. Returns what is wrong, and what the page showed.
+ */
+async function demoShot(page, shot, { size, phone = false }, more = () => []) {
   await capture(page, shot);
-  const shown = await page.evaluate(demoAudienceShown);
+  const read = await page.evaluate(demoShown, DEMO_CONTROLS);
+  const shown = { ...read, streams: await demoMusic(page, 0) };
+  const pressed = shown.pins.find((pin) => pin.pressed)?.text ?? 'none';
   console.log(
-    `${shot.padEnd(19)}@ ${size}: label „${shown.label.text}" at ${shown.label.px} px, line ` +
-      `„${shown.line.text ?? 'none'}"; ${shown.crew.join(' · ')}; ${shown.atConsole} at a ` +
-      `console; ways along the foot ${shown.ways.join(', ')} px tall; QR ${shown.qr} px; ` +
-      `the world ${shown.world.join('x')} px`,
+    `${shot.padEnd(19)}@ ${size}: ${shown.lab ? 'the whole lab' : 'a seat’s screen'}, ` +
+      `„${shown.onAir.text}" at ${shown.onAir.px} px, „${pressed}" pressed; the picture ` +
+      `${shown.picture.join('x')} px; pins ${shown.pins[0]?.size.join('x')} px, the way out ` +
+      `${shown.leave.join('x')} px; QR ${shown.qr} px; music on ${shown.streams} streams`,
   );
-  return demoFaults(shown, phone).map((fault) => `${shot}: ${fault}`);
+  const wrong = [...demoFaults(shown, phone), ...wrongOf(more(shown))];
+  return { shown, wrong: wrong.map((fault) => `${shot}: ${fault}`) };
 }
 
+/** Whether one of the demo crew is named on air in `shown`, by its place in the crew or any. */
+const demoNames = (shown, seat = null) =>
+  (seat === null ? DEMO_NAMES : [DEMO_NAMES[seat]]).some(
+    (name) => shown.onAir.text?.startsWith(name) === true,
+  );
+
 /**
- * menu-demo.png and demo-audience.png: „Demo" in the laptop's menu, a target of a finger's
- * height, pressed — no name typed, no code — leads into the audience, where both of the crew
- * stand at a console within a minute. Returns the page, still watching, when each view of the
- * audience came to it, and what was wrong.
+ * menu-demo.png and demo-player.png: „Demo" in the laptop's menu, a target of a finger's
+ * height, pressed — no name typed, no code — leads onto the demo's screen, where within a minute
+ * one of the crew works a console on its own screen. Returns the page, still watching, when each
+ * view of the audience came to it, what it sent by kind, and what was wrong.
  */
 async function demoFromMenu(context) {
   const page = await openPage(context, 'demo');
   page.on('pageerror', (e) => console.log('[demo error]', e.message));
   const views = [];
-  page.on('websocket', (socket) =>
+  const sent = [];
+  page.on('websocket', (socket) => {
     socket.on('framereceived', ({ payload }) => {
       if (String(payload).startsWith('{"kind":"spectator-view"')) {
         views.push(Date.now());
       }
-    }),
-  );
+    });
+    socket.on('framesent', ({ payload }) => sent.push(JSON.parse(String(payload)).kind));
+  });
   await page.goto(traced(BASE));
   const item = page.locator('.menu-item', { hasText: 'Demo' });
   await item.waitFor({ timeout: 10_000 });
@@ -18273,21 +18328,114 @@ async function demoFromMenu(context) {
   const height = Math.round((await item.boundingBox())?.height ?? 0);
   console.log(`menu-demo.png      „Demo" in the focus, ${height} px tall`);
   await item.click();
-  await page.locator('.spectate').waitFor({ timeout: 10_000 });
-  const working = () => document.querySelectorAll('.spectate-foot .presence-pult').length === 2;
+  await page.locator('.demo').waitFor({ timeout: 10_000 });
+  const working = () =>
+    document.querySelector('.demo--seat .demo-onair')?.textContent?.includes('am Pult') === true;
   await page.waitForFunction(working, null, { timeout: 60_000 });
-  await sleep(1500); // both come to rest before the switch, the world drawn round them
-  const wrong = await demoAudienceShot(page, 'demo-audience.png', '1440x820');
-  await overflow(page, 'demo audience @ 1440x820');
+  await sleep(1500); // the cut's fade over, the panel up
+  const { wrong } = await demoShot(page, 'demo-player.png', { size: '1440x820' }, (shown) => [
+    [shown.lab || !demoNames(shown), `on air: „${shown.onAir.text}"`],
+    [shown.inert !== true, 'no seat’s screen is up, or it is not inert'],
+  ]);
+  await overflow(page, 'demo @ 1440x820');
   wrong.push(...wrongOf([[height < DEMO_TARGET_PX, `„Demo" is ${height} px tall`]]));
-  return { page, views, wrong };
+  return { page, views, sent, wrong };
 }
 
 /**
- * demo-audience-phone.png and demo-audience-phone-932.png: a phone that asks for less motion
- * comes by the demo's link and stands in the audience at once, upright and turned sideways;
- * there „Zuschauen beenden" leads back to the menu, „Demo" among the items a phone held sideways
- * keeps.
+ * The demo's page poked as a player would play: the game's keys, and a click into the picture.
+ * It sends nothing for it (`sent`, the kinds of what the page sent so far), and nothing opens.
+ */
+async function demoTakesNothing(page, sent) {
+  const before = sent.length;
+  for (const key of ['n', 'i', 'e', 'q', 'w', 'a', 's', 'd', 'Space', 'Enter', 'ArrowLeft']) {
+    await page.keyboard.press(key);
+  }
+  const box = await page.locator('.demo-picture').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await sleep(700);
+  const said = sent.slice(before).filter((kind) => !DEMO_MAY_SEND.has(kind));
+  const open = await page.locator('.notepad, .info-panel, .chat-wheel, .pause-menu').count();
+  console.log(
+    `demo               poked with the game's keys and a click: the page sent ` +
+      `${said.length === 0 ? 'nothing' : `!! ${said.join(', ')}`}, ${open} things opened`,
+  );
+  return wrongOf([
+    [said.length > 0, `the page sent ${said.join(', ')} for a key or a click`],
+    [open > 0, 'a key opened something over the picture'],
+  ]);
+}
+
+/** The pin named `label` pressed on `page`, and the picture it brings there. */
+async function demoPin(page, label, lab) {
+  await page.locator('.demo-pin', { hasText: label }).click();
+  await page.locator(lab ? '.demo--lab' : '.demo--seat').waitFor({ timeout: 10_000 });
+}
+
+/** The music under the demo's page: on how many streams it plays, once it had `ms` to start. */
+async function demoMusic(page, ms) {
+  const playing = () => (globalThis.__escapelab?.audio?.music?.streams ?? 0) > 0;
+  if (ms > 0) {
+    await page.waitForFunction(playing, null, { timeout: ms }).catch(() => undefined);
+  }
+  return page.evaluate(() => globalThis.__escapelab?.audio?.music?.streams ?? 0);
+}
+
+/**
+ * demo-overview.png and demo-switch.png: „Übersicht" pins the whole lab over the seat's screen;
+ * „HCW Master" cuts to the second seat, the cut held halfway through its fade for the picture.
+ * The music that played under the first picture plays on under both: no cut stops it. Back to
+ * the director's cut after.
+ */
+async function demoPictures(page, sent) {
+  const quiet = AUDIO_OFF.includes('music');
+  const before = await demoMusic(page, quiet ? 0 : 20_000);
+  await demoPin(page, 'Übersicht', true);
+  await sleep(900); // the lab faded in
+  const lab = await demoShot(page, 'demo-overview.png', { size: '1440x820' }, (shown) => [
+    [!shown.lab || shown.onAir.text !== DEMO_OVERVIEW, `on air: „${shown.onAir.text}"`],
+    [!shown.pins[2]?.pressed, '„Übersicht" is not the pin pressed'],
+    [shown.streams < before, `the music fell from ${before} streams to ${shown.streams}`],
+  ]);
+  // The fade held in its middle: the lab's last picture half gone over the seat's screen.
+  const hold = await page.addStyleTag({
+    content:
+      '.demo-fade--on { animation-play-state: paused !important; ' +
+      'animation-delay: -200ms !important; }',
+  });
+  await demoPin(page, 'HCW Master', false);
+  await page.locator('.demo-fade--on').waitFor({ state: 'attached', timeout: 5000 });
+  await sleep(300);
+  const cut = await demoShot(page, 'demo-switch.png', { size: '1440x820' }, (shown) => [
+    [shown.lab || !demoNames(shown, 1), `on air: „${shown.onAir.text}"`],
+    [!(shown.fade > 0.2 && shown.fade < 0.8), `the fading picture stands at ${shown.fade}`],
+    [shown.streams < before, `the music fell from ${before} streams to ${shown.streams}`],
+  ]);
+  await hold.evaluate((style) => style.remove());
+  // The keys step through the pictures as a spectator's do: ← from the second seat to the first.
+  await page.keyboard.press('ArrowLeft');
+  await sleep(400);
+  const first = await page.locator('.demo-pin[aria-pressed="true"]').innerText();
+  const pinned = sent.filter((kind) => kind === 'demo-pin').length;
+  console.log(
+    `demo               picked the lab, the second seat, and by ← „${first}": ${pinned} pins ` +
+      `sent; the music on ${before} streams before, ${cut.shown.streams} after`,
+  );
+  return [
+    ...lab.wrong,
+    ...cut.wrong,
+    ...wrongOf([
+      [first !== DEMO_PINS[0], `← led to „${first}"`],
+      [pinned !== 4, `${pinned} pins sent, not the first seat's and three more`],
+      [!quiet && before === 0, 'no music played under the seat’s screen'],
+    ]),
+  ];
+}
+
+/**
+ * demo-phone.png and demo-phone-932.png: a phone that asks for less motion comes by the demo's
+ * link and stands on the demo's screen at once, upright and turned sideways; there the way out
+ * leads back to the menu, „Demo" among the items a phone held sideways keeps.
  */
 async function demoByLink(context) {
   const page = await openPage(context, 'demo phone');
@@ -18295,17 +18443,19 @@ async function demoByLink(context) {
   const link = new URL(traced(BASE));
   link.searchParams.set('demo', '1');
   await page.goto(link.href);
-  await page.locator('.spectate .demo-label').waitFor({ timeout: 10_000 });
-  await sleep(600);
+  await page.locator('.demo .demo-label').waitFor({ timeout: 10_000 });
+  // Whoever comes is shown the first seat's own screen.
+  await page.locator('.demo--seat').waitFor({ timeout: 10_000 });
+  await sleep(800);
   const upright = `${SIZES[2].width}x${SIZES[2].height}`;
-  const wrong = await demoAudienceShot(page, 'demo-audience-phone.png', upright, true);
+  const seat = (shown) => [[shown.lab || !demoNames(shown, 0), `on air: „${shown.onAir.text}"`]];
+  const { wrong } = await demoShot(page, 'demo-phone.png', { size: upright, phone: true }, seat);
   await page.setViewportSize({ width: 932, height: 430 });
   await sleep(600);
-  const turned = await demoAudienceShot(page, 'demo-audience-phone-932.png', '932x430', true);
-  wrong.push(...turned);
-  const stop = page.locator('.spectate-foot button', { hasText: 'Zuschauen beenden' });
-  await stop.scrollIntoViewIfNeeded();
-  await stop.tap();
+  const size = { size: '932x430', phone: true };
+  const turned = await demoShot(page, 'demo-phone-932.png', size, seat);
+  wrong.push(...turned.wrong);
+  await page.locator('.demo-leave').tap();
   const back = page.locator('.menu-item', { hasText: 'Demo' });
   const menu = await back.waitFor({ timeout: 10_000 }).then(
     () => true,
@@ -18317,10 +18467,10 @@ async function demoByLink(context) {
 }
 
 /**
- * The server killed under the demo's audience — no word of a restart, as a crash or a host's
- * restart takes it — and started again: `page`, which nobody touches, is back in the demo room's
- * audience by itself within DEMO_BACK_MS, a new view of it heard (`views`, when each came), the
- * page never loaded anew, its label there. Left out where the run does not own its server.
+ * The server killed under the demo's screen — no word of a restart, as a crash or a host's
+ * restart takes it — and started again: `page`, which nobody touches, is back on the demo by
+ * itself within DEMO_BACK_MS, a new view of it heard (`views`, when each came), the page never
+ * loaded anew, its label there. Left out where the run does not own its server.
  */
 async function demoRecovers(page, views) {
   if (owned === null) {
@@ -18341,16 +18491,16 @@ async function demoRecovers(page, views) {
   const back = views.find((at) => at > from);
   await sleep(1000);
   const kept = await page.evaluate(() => globalThis.demoNeverReloaded === true);
-  const label = await page.locator('.spectate .demo-label').isVisible();
+  const label = await page.locator('.demo .demo-label').first().isVisible();
   const card = (await page.locator('.line-lost').count()) > 0;
   const took = back === undefined ? '!! never' : `after ${seconds(back - from)}`;
   console.log(
     `demo               server killed and started again: the page ${down ? 'said its line ' +
-      'was down' : 'said nothing'}, back in the audience ${took}, ` +
+      'was down' : 'said nothing'}, back on the demo ${took}, ` +
       `${kept ? 'never loaded anew' : '!! loaded anew'}`,
   );
   return wrongOf([
-    [back === undefined, `the page was not back in the audience in ${seconds(DEMO_BACK_MS)}`],
+    [back === undefined, `the page was not back on the demo in ${seconds(DEMO_BACK_MS)}`],
     [!kept, 'the page was loaded anew'],
     [!label || card, 'back, the page shows no label, or still its line’s card'],
   ]);
@@ -18373,7 +18523,8 @@ async function captureDemo() {
     reducedMotion: 'reduce',
   });
   try {
-    const { page, views, wrong } = await demoFromMenu(laptop);
+    const { page, views, sent, wrong } = await demoFromMenu(laptop);
+    wrong.push(...(await demoTakesNothing(page, sent)), ...(await demoPictures(page, sent)));
     wrong.push(...(await demoByLink(phone)), ...(await demoRecovers(page, views)));
     console.log(`demo               the drill took ${seconds(Date.now() - from)}`);
     if (wrong.length > 0) {

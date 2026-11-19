@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type {
   ClientMessage,
+  DemoDoing,
   DronePosition,
   ManualHere,
   MapView,
@@ -10,6 +11,7 @@ import type {
 } from '@escapelab/core';
 import { clockText, clockTime, formatLeft, type MissionTime } from '../clock.js';
 import { useKeys, useNow, useServerNow } from '../hooks.js';
+import { useDeafKeys } from '../input/deaf.js';
 import { withCapture } from '../notes.js';
 import { NotepadContext, NotingPlace, placeName, type NotepadHand } from '../noting.js';
 import {
@@ -97,7 +99,25 @@ interface Props {
   finale: Finale | null;
   /** the own line, whose card stands over the world while it is down (Line.tsx) */
   line: GameLine;
+  /**
+   * the screen shows a seat it does not play — the demo's audience on the own view of one of
+   * its crew (Demo.tsx) —: what that seat is doing, by which the station's panel and a source's
+   * pages lie over the world as its player would have them. Such a screen is read-only: it takes
+   * no key and no finger, offers no control, and nothing it shows sends anything.
+   */
+  watch?: Watch;
 }
+
+/** A seat watched (`Props.watch`). */
+export interface Watch {
+  /** what the seat is doing: its console's panel, its source's pages lie over the world by it */
+  doing: DemoDoing;
+  /** the whole lab is shown over this screen: it is heard on, and draws nothing */
+  covered: boolean;
+}
+
+/** Sends nothing: what a watched screen hands every control it shows. */
+const SENDS_NOTHING = (): void => undefined;
 
 /**
  * The whole seconds left until `endsAt` on the server's clock at `now` — standing still at the
@@ -518,6 +538,31 @@ export function stillOpen(opened: Opened, wasEmergency: boolean, emergency: bool
 }
 
 /**
+ * What is open over the world: what this player opened (`mine`) — or, on a seat watched
+ * (`Props.watch`), what that seat is doing: its console's panel, its source's pages.
+ */
+export function openedBy(mine: Opened, watch: Watch | undefined): Opened {
+  if (watch === undefined) {
+    return mine;
+  }
+  const { what, sourceId } = watch.doing;
+  return { ...NOTHING_OPEN, operating: what === 'operate', readingId: sourceId };
+}
+
+/**
+ * What a screen sends by: its line's `send` — or, where it watches a seat, nothing at all, the
+ * game's keys deaf for as long as it stands (input/deaf.ts).
+ */
+function useHand(props: Props): { watched: boolean; send: Props['send']; offer: ReactNode } {
+  const watched = props.watch !== undefined;
+  useDeafKeys(watched);
+  if (watched) {
+    return { watched, send: SENDS_NOTHING, offer: null };
+  }
+  return { watched, send: props.send, offer: offerFor(props.view, props.send) };
+}
+
+/**
  * What lies over the world: the open station's panel while this player
  * stands at it and asked for it, a manual object's pages or a note of the
  * last shift while they stand there, the notepad, the info panel. Panel,
@@ -527,7 +572,10 @@ export function stillOpen(opened: Opened, wasEmergency: boolean, emergency: bool
  * keeps the keys: the notepad does not open under it, nor the info panel
  * over it.
  */
-function useOpened(view: PlayerView): {
+function useOpened(
+  view: PlayerView,
+  watch?: Watch,
+): {
   station: PuzzleView | null;
   reading: ManualHere | null;
   note: NoteHere | null;
@@ -538,7 +586,8 @@ function useOpened(view: PlayerView): {
   toggleNotes: () => void;
   toggleInfo: () => void;
 } {
-  const [opened, setOpened] = useState(NOTHING_OPEN);
+  const [mine, setOpened] = useState(NOTHING_OPEN);
+  const opened = openedBy(mine, watch);
   const armed = view.map?.stations.find(isArmed)?.puzzleId ?? null;
   const atStation = armed !== null && view.presence.stationId === armed;
   const wasAtStation = useRef(atStation);
@@ -1434,6 +1483,8 @@ function RunWorld({
       pingsRef={game.pingsRef}
       chatsRef={game.chatsRef}
       spectator={false}
+      watched={game.watch !== undefined}
+      covered={game.watch?.covered === true}
       darkSince={coldOpen.darkSince}
       finale={finale === null ? null : { ending: finale.ending, since: finale.since }}
       station={station}
@@ -1486,6 +1537,13 @@ function useCrewStrip(
   return { row: null, strip };
 }
 
+/** The run's opening over the world, while its cue plays; watched, nothing skips it. */
+function Opening({ intro, view, watched }: { intro: Intro; view: PlayerView; watched: boolean }) {
+  return intro.cue === null ? null : (
+    <IntroOverlay cue={intro.cue} view={view} skip={intro.skip} watched={watched} />
+  );
+}
+
 /** Whether the opening keeps the HUD out now: it fades, the tips and the sign's note wait. */
 function hudOut(intro: Intro): boolean {
   return intro.cue !== null && hudHeld(intro.cue, Date.now());
@@ -1501,7 +1559,8 @@ function hudOut(intro: Intro): boolean {
  * (PutDown.tsx).
  */
 export function GameScreen(props: Props) {
-  const { view, roomCode, positionsRef, send, refusal, finale } = props;
+  const { view, roomCode, positionsRef, refusal, finale } = props;
+  const { watched, send, offer } = useHand(props);
   const { alarmVisible } = useFeedback(view);
   const intro = useIntro(view, send);
   const cue = intro.cue;
@@ -1510,7 +1569,7 @@ export function GameScreen(props: Props) {
   // While the opening keeps the HUD out the bar is faded: the sign's note waits for it.
   const heldNow = hudOut(intro);
   const notice = useNotices(view, heldNow ? { ...coldOpen.gates, sign: null } : coldOpen.gates);
-  const open = useOpened(view);
+  const open = useOpened(view, props.watch);
   const station = useSolvedHold(open.station, view.currentPuzzleIndex);
   // Stepped back from, the device fades out as it came: held a moment, taking nothing more.
   const panel = useLeaving(station, PANEL_FADE_MS);
@@ -1521,7 +1580,7 @@ export function GameScreen(props: Props) {
   const menu = usePause();
   useScreenKeys(open, pad.toggle, [panel, sheets.reading, sheets.note], closeModal, menu);
   // Until the click of the cold open the strip keeps quiet: the opener has the banner.
-  const crewStrip = useCrewStrip(props, notice?.kind === 'line' || !coldOpen.dark, {
+  const crewStrip = useCrewStrip({ ...props, send }, notice?.kind === 'line' || !coldOpen.dark, {
     notesOpen: open.notes,
     onToggleNotes: pad.toggle,
     onOpenInfo: () => open.set({ info: true }),
@@ -1536,8 +1595,9 @@ export function GameScreen(props: Props) {
   const over = station !== null || sheets.reading !== null || sheets.note !== null;
   const held = live && heldNow;
   const row = crewStrip.row;
+  const classes = gameClass(finale, live && open.notes && over, held, row !== null);
   return (
-    <div className={gameClass(finale, live && open.notes && over, held, row !== null)}>
+    <div className={classes} inert={watched}>
       {live && (
         <RunOverlays
           view={view}
@@ -1557,17 +1617,17 @@ export function GameScreen(props: Props) {
           deviceOpen={live && station !== null}
           self={self}
           row={row}
-          offer={offerFor(view, send)}
+          offer={offer}
         />
         <RunWorld
-          game={props}
+          game={{ ...props, send }}
           coldOpen={coldOpen}
           intro={intro.cue}
           station={station}
           open={open}
           holdTips={notice !== null || held}
         />
-        {live && cue !== null && <IntroOverlay cue={cue} view={view} skip={intro.skip} />}
+        {live && <Opening intro={intro} view={view} watched={watched} />}
         {live && open.notes && (
           <Notepad
             notes={pad.notes}

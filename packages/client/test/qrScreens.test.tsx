@@ -2,10 +2,11 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WORLD, offVoice } from '../../core/test/voice.js';
-import { RoomCode } from '../src/App.js';
+import { AppBar, RoomCode } from '../src/App.js';
+import { Panels } from '../src/screens/Join.js';
 import { qrOf, QUIET_MODULES } from '../src/qr.js';
 import { MENU_LABELS, menuItems, opensPanel } from '../src/screens/MainMenu.js';
-import { QR_PANEL_LINE, QrPanel } from '../src/screens/MenuPanels.js';
+import { CODE_MAX, codeOf, QR_PANEL_LINE, QrPanel } from '../src/screens/MenuPanels.js';
 import {
   addressText,
   inviteLink,
@@ -111,5 +112,65 @@ describe('a lobby’s invite as a QR code', () => {
   it('shows no chip where the link is too long for a code', () => {
     window.location.pathname = `/${'p'.repeat(90)}`;
     expect(renderToStaticMarkup(<InviteQr code="QX7R" />)).toBe('');
+  });
+});
+
+describe('the QR codes as the app wires them', () => {
+  /** The top bar over a connection whose room stands in `phase`. */
+  function bar(phase: 'lobby' | 'playing'): string {
+    const conn = {
+      view: { phase, seed: null, missionTitle: 'Blackout im Labor', difficulty: 'normal' },
+      spectatorView: null,
+      roomCode: 'QX7R',
+      status: 'open',
+      watching: 0,
+    } as unknown as Parameters<typeof AppBar>[0]['conn'];
+    const layer = { phase } as unknown as Parameters<typeof AppBar>[0]['layer'];
+    const menus = { gear: noop } as unknown as Parameters<typeof AppBar>[0]['menus'];
+    return renderToStaticMarkup(
+      <AppBar
+        conn={conn}
+        layer={layer}
+        menus={menus}
+        toEditor={null}
+        account={null}
+        menu={false}
+        covered={false}
+      />,
+    );
+  }
+
+  it('offers a room’s invite as a code in its lobby, and in no run', () => {
+    expect(bar('lobby')).toContain('class="invite-qr-chip"');
+    expect(bar('playing')).not.toContain('invite-qr');
+    expect(bar('playing')).toContain('QX7R');
+  });
+
+  it('opens the menu’s „QR-Code" as its panel, and nothing for no panel', () => {
+    const section = { send: noop, connected: true, name: 'Anna', blocked: false };
+    const panels = (panel: 'qr' | null): string =>
+      renderToStaticMarkup(
+        <Panels
+          panel={panel}
+          close={noop}
+          section={{ ...section, field: { typed: 'Anna', onName: noop } }}
+          props={{} as Parameters<typeof Panels>[0]['props']}
+          waiting={false}
+        />,
+      );
+    expect(panels('qr')).toContain(QR_PANEL_LINE);
+    expect(panels('qr')).toContain('<svg class="qr');
+    expect(panels(null)).toBe('');
+  });
+
+  it('takes no more of an invite’s code than a code is long', () => {
+    expect(CODE_MAX).toBe(10);
+    expect(codeOf('qx7r')).toBe('QX7R');
+    expect(codeOf('a'.repeat(500))).toBe('A'.repeat(10));
+    expect(codeOf('ab-12 cd!34ef56')).toBe('AB12CD34EF');
+  });
+
+  it('keeps the lobby’s code small enough on a low window for the lines under it', () => {
+    expect(ruleOf('.invite-qr-sheet .qr')).toContain('max-width: calc(100vh - 140px);');
   });
 });

@@ -2478,6 +2478,27 @@ assert(
   `the demo room shows its crew of two: ${demo.view.players.map((p) => p.name).join(', ')}`,
 );
 await visitor.untilSpectator('sees the demo crew start a run', (v) => v.phase === 'playing');
+// The demo's audience alone is sent a seat's own view — the one on air, or the one it pins —;
+// in a crew's room the same ask is refused, and nobody's view goes to its audience.
+type SeatView = Extract<ServerMessage, { kind: 'demo-view' }>;
+visitor.send({ kind: 'demo-pin', pin: 'two' });
+const pinned = await visitor.expect(
+  'the view of the seat it pinned',
+  (m): m is SeatView => m.kind === 'demo-view' && m.view.you.name === 'HCW Master',
+);
+assert(
+  pinned.seat === pinned.view.you.id && pinned.view.phase === 'playing',
+  'the demo sends its visitor the own view of the seat it pinned: HCW Master',
+);
+zoe.send({ kind: 'demo-pin', pin: 'one' });
+const noPin = await zoe.expect(
+  'the refusal of a pin in a crew’s room',
+  (m): m is Extract<ServerMessage, { kind: 'error' }> => m.kind === 'error' && m.of === 'demo-pin',
+);
+assert(
+  noPin.message === 'Die Bildregie gibt es nur in der Vorführung.',
+  `a crew’s room refuses the audience a seat’s view: „${noPin.message}“`,
+);
 const healthRes = await fetch(`http://localhost:${PORT}/health`);
 const health = (await healthRes.json()) as {
   rooms: { running: number; spectators: number };

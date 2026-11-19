@@ -556,6 +556,17 @@ describe('the opening over the world', () => {
     expect(html).not.toContain('intro-subtitle');
   });
 
+  it('offers no skip where the opening is watched, not played: the film alone', () => {
+    vi.setSystemTime(SINCE + 3200);
+    const watched = renderToStaticMarkup(
+      <IntroOverlay cue={watching} view={viewOf()} skip={() => undefined} watched />,
+    );
+    expect(overlay(watching)).toContain('intro-skip');
+    expect(watched).not.toContain('intro-skip');
+    expect(watched).not.toContain('Überspringen');
+    expect(watched).toContain('<div class="intro');
+  });
+
   it('offers the skip in the lower bar, counting the crew, and subtitles the loudspeakers', () => {
     vi.setSystemTime(SINCE + 3200);
     const html = overlay(watching, viewOf({ intro: { ...intro, done: ['p2'] } }));
