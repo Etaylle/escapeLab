@@ -83,10 +83,11 @@ import {
 const STEM_RMS = 10 ** (-20 / 20);
 const STING_RMS = 10 ** (-14 / 20);
 /**
- * The music at full: a stem's RMS 26 dB under the effects' level (audio.ts EFFECTS_LEVEL) at
- * the master gain — about where the synthesised pad before it sat.
+ * The music at full: a stem's RMS 21 dB under the effects' level (audio.ts EFFECTS_LEVEL) at
+ * the master gain — at the Musik slider's 70 % a dB or two over the plain rooms' beds, where at
+ * 26 dB under it sat 3 to 7 dB under them (docs/sound.md „How loud the music sits").
  */
-export const MUSIC_LEVEL = (EFFECTS_LEVEL * 10 ** (-26 / 20)) / STEM_RMS;
+export const MUSIC_LEVEL = (EFFECTS_LEVEL * 10 ** (-21 / 20)) / STEM_RMS;
 /** The end card's sting: its RMS 8 dB under the effects' level, the music gone by then. */
 export const STING_LEVEL = (EFFECTS_LEVEL * 10 ** (-8 / 20)) / STING_RMS;
 /** The music starts this long after the click of the blackout, ms (coldOpen.ts REVEAL_MS). */

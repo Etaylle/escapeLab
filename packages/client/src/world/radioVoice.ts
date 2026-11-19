@@ -21,7 +21,7 @@ import { sample, type SfxId } from './samples.js';
  * (scripts/voice.ts, public/voice/) and played as a handset hears them — band-limited to
  * 300 Hz–3.4 kHz, lightly saturated, over a faint bed of static, keyed with a squelch at either
  * end, the run's first line opened with the Leitstelle's own squelch, the squelches recordings
- * of their own (samples.ts) — while the music goes 8 dB and the beds 4 dB down under it (mix.ts
+ * of their own (samples.ts) — while the music goes 12 dB and the beds 4 dB down under it (mix.ts
  * `duck`). The banner goes up as the line starts and stays while it speaks (onAir.ts); a line
  * without a recording, as a custom mission's, still only chirps (audio.ts `radioChirp`). At a
  * run's start a page fetches the recordings' list alone (`voiceForRun`), never a recording: a

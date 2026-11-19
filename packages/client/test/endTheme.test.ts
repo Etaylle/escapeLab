@@ -186,7 +186,7 @@ describe('the end card’s music', () => {
     await fetchIn();
     const engine = audio.audioEngine() as unknown as { music: FakeNode };
     expect(downstream(outOf(elements[1])).has(engine.music)).toBe(true);
-    expect(DUCK_DB.music.voice).toBe(-8);
+    expect(DUCK_DB.music.voice).toBe(-12);
   });
 });
 

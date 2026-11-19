@@ -332,9 +332,10 @@ short sound a change at most, a voice each from the budget like every effect, no
 audience's screen; nothing of it lasts or loops, so the five lines' motion — a CSS animation each
 packet, no frame loop — costs the audio nothing per frame.
 
-**Ducking.** Mission control's voice pulls the music 8 dB and the beds 4 dB down while it is on
+**Ducking.** Mission control's voice pulls the music 12 dB and the beds 4 dB down while it is on
 the air — from its opening squelch where it opens a run, else from its first word — and the
-klaxon, the alarm's sting and the siren pull the music 6 dB down while they sound, and a piece the
+klaxon, the alarm's sting and the siren pull the music 6 dB down while they sound, the crew's
+voices in the lobby 8 dB, and a piece the
 settings play for the ear pulls it 24 dB down while it plays (Musikpakete); where several
 pull at once the deepest holds, and as one lets go the bus comes back to the next deepest. A bus
 goes down over 50 ms and comes back over 400 ms, on straight lines laid on the audio clock from
@@ -351,8 +352,8 @@ crew's voice, below).
 
 Levels, at the master gain: the effects around 0.04 (`EFFECTS_LEVEL`) for a recording whose
 peak stands at −3 dBFS; a room's bed 0.03 for one at −20 dBFS RMS, each layer a few dB up or
-down from it; the music 0.02 for a stem at −20 dBFS RMS — its RMS 26 dB under the effects'
-level, about where the synthesised pad sat; the end card's sting its RMS 8 dB under the
+down from it; the music 0.036 for a stem at −20 dBFS RMS — its RMS 21 dB under the effects'
+level (How loud the music sits, below); the end card's sting its RMS 8 dB under the
 effects' level; the loops of the mains hum, the siren and the drone at levels that put each
 about where the sound it replaced sat; the radio voice at 0.12 of a line's peak; a partner's
 step at 0.02 before it is placed, your own 4 dB under it.
@@ -1377,6 +1378,21 @@ rising to a C major chord over a breath of wind, or `lost`, a low A-minor chord 
 silence. The heartbeat that quickened through the last minute is gone with the synthesised layers:
 the critical stem carries the last minute.
 
+## How loud the music sits
+
+Measured from the levels in code (2026-11-20), RMS at the master gain, the settings at their
+defaults (Musik 70 % = −3.1 dB, the rest 100 %): a stem at −20 dBFS after its gain came out at
+−57.1 dBFS — under every bed but the archive's (plain rooms, the lab and the control room −53.5,
+the corridor −52.5, the reactor's two layers together −49.5 since M-tension, the server room
+−47.5, the archive −58.5) and some 26 dB under the radio (a line's peak at −19.3 dBFS, its RMS
+about 12 dB under that). Where a bed played, the bed covered the music. Now the stems sit 5 dB
+higher (`MUSIC_LEVEL`, 21 dB under the effects' level instead of 26): −52.0 dBFS, a dB or two
+over the plain rooms, under the server room, still some 21 dB under the radio. So that no line
+is masked, the radio's duck goes from 8 to 12 dB: under a line the music sits at −64.0, a dB
+over where it sat before (−65.1). The same level carries the menu's theme, the lobby's, the
+opening's cue and the end card's theme (all on `MUSIC_LEVEL`), and the settings' preview of a
+piece. The crew's voices still pull it 8 dB, the klaxon and the siren 6.
+
 ## What the budget changed, to the ear
 
 - A room behind a door plays its main layer only, and only the two nearest such rooms play;
@@ -1462,7 +1478,7 @@ comes near and let go 4 s after, the rest brought in as the lights fail, the roo
 `test/spatial.test.ts` (pan, the inverse model and its 12 tiles, a wall's 600 Hz, 6 dB and 15 ms,
 steps on the floor under a partner, the rotor, the chirp and the fly-by placed, the doors placed and
 the audience's unplaced), `test/radioVoice.test.ts` (the chain, the shaper's distortion, the
-static's level, the speech, the squelches' recordings, the Leitstelle's opening, the music 8 dB and
+static's level, the speech, the squelches' recordings, the Leitstelle's opening, the music 12 dB and
 the beds 4 dB down, no recording fetched as a run starts and each line's own as it is queued,
 decoded only on the air, the files of the last four kept and none of a run before, a line let go
 once its sound has ended however late and not while it is on the air again, the newest of two and
@@ -1736,7 +1752,7 @@ more, piano arpeggios like first light, coming to rest on a long held chord — 
 music breaking off, the motif sunk into the piano's low register over a bowed bass, the pad dimming
 like failing lights, into silence. Each lasts 40 s and plays once through to its true end, never
 round again; until the score is kept, the older themes of 32 s. It streams on the music's bus at the
-stems' level, so the radio's voice pulls it 8 dB down as it does the run's music, and takes one
+stems' level, so the radio's voice pulls it 12 dB down as it does the run's music, and takes one
 voice of the budget while it plays. It goes with its card — the crew on to another run, back to the
 lobby or out — fading over 1 s and holding the bus until then, so the lobby's theme comes in only
 after it. The sting waits for the bus as well: the run's music has faded by the time the card comes.

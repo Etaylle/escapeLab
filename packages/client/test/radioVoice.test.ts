@@ -304,14 +304,14 @@ describe('a line spoken over the radio', () => {
     expect(20 * Math.log10((KEY_LEVEL * 10 ** (-3 / 20)) / SPEECH_PEAK)).toBeCloseTo(-5.8, 1);
   });
 
-  it('pulls the music 8 dB and the beds 4 dB down while it speaks, and reports it', async () => {
+  it('pulls the music 12 dB and the beds 4 dB down while it speaks, and reports it', async () => {
     const radio = await voice();
     radio.voiceForRun();
     await settle();
     await radio.sayLine(LEVER_LINE);
     const ctx = lastContext();
     const { musicDuck, ambienceDuck } = await ducks();
-    const music = 10 ** (-8 / 20);
+    const music = 10 ** (-12 / 20);
     expect(musicDuck.gain.ramps()).toEqual([
       [1, expect.closeTo(10.08, 9)], // as the speech starts…
       [expect.closeTo(music, 9), expect.closeTo(10.13, 9)], // …down in 50 ms…
@@ -348,7 +348,7 @@ describe('a line spoken over the radio', () => {
     expect(keysOf(ctx, 'radio-key')).toEqual([expect.closeTo(10.01 + OPEN_S, 9)]);
     const { musicDuck } = await ducks();
     // Pulled down as the Leitstelle opens the channel, not as the voice comes in.
-    expect(musicDuck.gain.ramps()[1]).toEqual([expect.closeTo(10 ** (-8 / 20), 9), 10.06]);
+    expect(musicDuck.gain.ramps()[1]).toEqual([expect.closeTo(10 ** (-12 / 20), 9), 10.06]);
     expect(radio.voiceProbe()).toMatchObject({ lastId: 'cccccccccccc', opened: true });
     ctx.currentTime = 10.45; // the opening plays, the voice has not begun
     expect(radio.voiceProbe().playing).toBe(false);
