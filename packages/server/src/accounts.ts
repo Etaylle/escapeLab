@@ -11,6 +11,7 @@ import {
   type AccountView,
   type AchievementId,
   type CrewPass,
+  type RunBoard,
 } from '@escapelab/core';
 import {
   DeriveQueue,
@@ -163,9 +164,10 @@ const isAchievement = (id: string): id is AchievementId => ACHIEVEMENT_IDS.some(
 
 /**
  * A run of an account's as „Meine Einsätze" lists it: the account's seat in it, its time on the
- * clock and its grade, both reckoned from its report as the end screen did from the run.
+ * clock and its grade, both reckoned from its report as the end screen did from the run, and the
+ * `board` the Bestenliste puts it on.
  */
-export function accountRunOf({ run, seat }: SeatedRun): AccountRun {
+export function accountRunOf({ run, seat }: SeatedRun, board: RunBoard): AccountRun {
   const daily = run.version === 2 && run.daily === true;
   return {
     missionId: run.missionId,
@@ -177,6 +179,7 @@ export function accountRunOf({ run, seat }: SeatedRun): AccountRun {
     crew: run.version === 1 ? [] : [...run.crew],
     seat,
     rank: reportGrade(run)?.rank ?? null,
+    board,
   };
 }
 
@@ -464,7 +467,8 @@ export class AccountDesk {
         return { runs: [], total: 0 };
       }
       const { total, runs } = await this.store.runsOfAccount(account.id, MY_RUNS);
-      return { runs: runs.map(accountRunOf), total };
+      const stats = this.store.stats();
+      return { runs: runs.map((seated) => accountRunOf(seated, stats.boardOf(seated.run))), total };
     });
   }
 

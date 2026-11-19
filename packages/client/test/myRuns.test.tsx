@@ -26,6 +26,7 @@ function run(parts: Partial<AccountRun> = {}): AccountRun {
     crew: ['Anna', 'Ben'],
     seat: 0,
     rank: 'A',
+    board: 'live',
     ...parts,
   };
 }
@@ -85,6 +86,29 @@ describe('„Meine Einsätze"', () => {
     expect(rowsOf(html)[0]?.slice(0, 1)).toEqual(['goneNormal · Tagesschicht 12.11.']);
     expect(rowsOf(html)[0]?.[4]).toBe('Anna, Cleo');
     expect(html).toContain('Die letzten 1 von 5 Einsätzen.');
+  });
+
+  it('marks a run of an earlier chain with its board’s name, one on no board as out of it', () => {
+    const html = renderToStaticMarkup(
+      <MyRunsTable
+        mine={{
+          runs: [
+            run(),
+            run({ board: 'archive', finishedAt: DAY - 1 }),
+            run({ board: 'archive', daily: '2026-11-12', finishedAt: DAY - 2 }),
+            run({ board: 'none', finishedAt: DAY - 3 }),
+          ],
+          total: 4,
+        }}
+        missions={[blackout]}
+      />,
+    );
+    expect(rowsOf(html).map((row) => row[0])).toEqual([
+      'Blackout im LaborNormal',
+      'Blackout im LaborNormal · Frühere Anlage',
+      'Blackout im LaborNormal · Tagesschicht 12.11. · Frühere Anlage',
+      'Blackout im LaborNormal · Außer Wertung',
+    ]);
   });
 
   it('says so where the account played none, and while it waits or failed', () => {

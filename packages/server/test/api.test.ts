@@ -262,30 +262,46 @@ describe('GET /stats of Blackout, whose chain got a Wechselplatz', () => {
   const standing = (stats: RunStats, url: string) =>
     statsResponse(stats, shipped, url)?.body as MissionStanding;
 
-  it('answers an empty board on the first day: no group, no place, for the card to say nothing', () => {
+  it('answers an empty live board on the first day, the older run on the archive alone', () => {
     const stats = new RunStats([older], ranked);
-    expect(statsResponse(stats, shipped, '/stats')).toEqual({ status: 200, body: [] });
-    // The mission is known, nobody ranked on it yet: the lobby's card names no best time, and
-    // the end card of a run of the older chain — in flight over the deploy — shows no place.
-    expect(standing(stats, '/stats/blackout')).toEqual({
+    const archive = [{ difficulty: 'normal', runs: 1, wins: 1, bestSeconds: 300 }];
+    expect(statsResponse(stats, shipped, '/stats')?.body).toMatchObject([
+      { missionId: 'blackout', difficulties: [], archive },
+    ]);
+    // Nobody ranked live on it yet: the lobby's card names no best time, and the end card of a
+    // run of the older chain — in flight over the deploy — shows no place.
+    expect(standing(stats, '/stats/blackout')).toMatchObject({
       missionId: 'blackout',
       difficulties: [],
+      archive,
       place: null,
     });
     expect(standing(stats, `/stats/blackout?run=${older.finishedAt}`).place).toBeNull();
   });
 
-  it('puts the first crew of the new chain first of one, the older run counted nowhere', () => {
+  it('puts the first crew of the new chain first of one, the older run on the archive', () => {
     const stats = new RunStats([older, newer], ranked);
     const asked = standing(stats, `/stats/blackout?run=${newer.finishedAt}`);
     expect(asked.place).toEqual({ difficulty: 'normal', place: 1 });
     expect(asked.difficulties).toMatchObject([
       { difficulty: 'normal', runs: 1, wins: 1, bestSeconds: 540, top: [{ crew: ['Cleo', 'Dan'] }] },
     ]);
+    expect(asked.archive).toMatchObject([
+      { runs: 1, bestSeconds: 300, top: [{ crew: ['Anna', 'Ben'] }] },
+    ]);
     expect(standing(stats, `/stats/blackout?run=${older.finishedAt}`).place).toBeNull();
   });
 
-  it('ranks a day of the Tagesschicht by the same rule', () => {
+  it('answers no archive for a mission without runs of an earlier chain', () => {
+    const stats = new RunStats([newer], ranked);
+    expect(statsResponse(stats, shipped, '/stats')?.body).toEqual([
+      expect.not.objectContaining({ archive: expect.anything() }),
+    ]);
+    expect(standing(stats, '/stats/blackout')).not.toHaveProperty('archive');
+    expect(standing(stats, '/stats/systemcheck')).not.toHaveProperty('archive');
+  });
+
+  it('ranks a day of the Tagesschicht by the same rule, its older run on the day’s archive', () => {
     const daily = (report: RunReport): RunReport => ({ ...report, daily: true });
     const stats = new RunStats([daily(older), daily(newer)], ranked);
     const days = statsResponse(stats, shipped, '/stats/daily')?.body as {
@@ -293,6 +309,7 @@ describe('GET /stats of Blackout, whose chain got a Wechselplatz', () => {
     }[];
     expect(days).toHaveLength(1);
     expect(days[0]?.missions[0]?.difficulties.map((group) => group.runs)).toEqual([1]);
+    expect(days[0]?.missions[0]?.archive?.map((group) => group.bestSeconds)).toEqual([300]);
   });
 });
 
