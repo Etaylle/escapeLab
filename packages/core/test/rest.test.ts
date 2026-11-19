@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   applyAction,
+  EMERGENCY_MISSED,
   moduleFor,
   parseMission,
   puzzleDueAt,
@@ -10,7 +11,6 @@ import {
   viewForSpectator,
 } from '../src/index.js';
 import type { Action, GameState, Mission, PuzzleState, PuzzleView } from '../src/index.js';
-import { EMERGENCY_MISSED } from '../src/actions.js';
 import type { FirewallState } from '../src/puzzles/firewall.js';
 import type { StartupState } from '../src/puzzles/startup.js';
 import { lightsOut, standing, started, T0 } from './lab.js';
