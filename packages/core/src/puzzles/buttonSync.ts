@@ -331,6 +331,15 @@ export const buttonSyncModule: PuzzleModule<
   dueAt,
   expire: expireAt,
 
+  /**
+   * Presses in their window as the emergency came are off, and nobody's device says „verfallen"
+   * for it: the window opens anew with the next press. Without a window every press stays.
+   */
+  resume(def, state) {
+    const none = def.windowMs === undefined || Object.keys(state.pressed).length === 0;
+    return none ? state : { ...state, pressed: {} };
+  },
+
   view(def, state, viewer, ctx) {
     const own = viewer.playerId === null ? undefined : state.pressed[viewer.playerId];
     const windowMs = def.windowMs ?? null;

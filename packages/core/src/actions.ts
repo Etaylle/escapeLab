@@ -1289,6 +1289,7 @@ function startMission(
     currentPuzzleIndex: 0,
     picked: false,
     puzzleState: null,
+    resting: null,
     seed,
     // The Tagesschicht a run plays is the day it starts on, by the server's clock.
     daily: daily === null ? null : daily.day,
@@ -1665,16 +1666,17 @@ function overNow(state: GameState, phase: 'won' | 'lost', at: number): GameState
     phase,
     players: unready(state.players),
     puzzleState: null,
+    resting: null,
     sabotage: null,
     finishedAt: at,
   };
 }
 
 /**
- * An emergency interrupts whatever the crew was doing: the open puzzle is
- * dropped (its station stays armed and can be restarted afterwards), the
- * plant's loudspeakers say so, where the mission gives them a message, and the
- * operator after them.
+ * An emergency interrupts whatever the crew was doing: the open puzzle is put by (`resting`) —
+ * off the consoles, taking no input, its clock standing still — until the emergency is over
+ * (`backFromRest`); the plant's loudspeakers say so, where the mission gives them a message,
+ * and the operator after them.
  */
 function startSabotage(state: GameState, action: { at: number }): GameState {
   const sabotage = state.mission.map.sabotage;
@@ -1686,6 +1688,7 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
     {
       ...state,
       puzzleState: null,
+      resting: state.puzzleState,
       sabotage:
         sabotage.mode === 'relay'
           ? { endsAt, emergency: openEmergency(state, relayCrewOf(state, action.at), action.at) }
@@ -1702,6 +1705,22 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
 }
 
 /**
+ * The emergency over at `at`, cleared or missed: the station that rested through it is back on
+ * its consoles with what the crew had done there, as its module brings it back (`resume`) —
+ * whatever was under way on its clock called off without a fault; a module without one comes
+ * back as it was. No station where none was switched on as the emergency started.
+ */
+function backFromRest(state: GameState, at: number): GameState {
+  const { resting } = state;
+  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  if (resting === null || def?.type !== resting.type) {
+    return { ...state, sabotage: null, resting: null };
+  }
+  const puzzleState = moduleFor(def.type).resume?.(def, resting, at) ?? resting;
+  return { ...state, sabotage: null, resting: null, puzzleState };
+}
+
+/**
  * Mission control's quiet clock once an emergency is over, at `at`: the crew comes back to the
  * station that is up, which is quiet from then on — none where no station is up.
  */
@@ -1715,7 +1734,7 @@ function clearSabotage(state: GameState, at: number): GameState {
     return state;
   }
   const cleared = logEvent(
-    { ...state, sabotage: null, quietSince: quietAfterEmergency(state, at) },
+    { ...backFromRest(state, at), quietSince: quietAfterEmergency(state, at) },
     'sabotage',
     EMERGENCY_CLEARED,
     at,
@@ -1870,7 +1889,7 @@ function expireSabotage(state: GameState, action: { at: number }): GameState {
     return state;
   }
   const missed = applyPenalty(
-    { ...state, sabotage: null, quietSince: quietAfterEmergency(state, action.at) },
+    { ...backFromRest(state, action.at), quietSince: quietAfterEmergency(state, action.at) },
     sabotage.penaltySec,
     action.at,
     EMERGENCY_MISSED,
@@ -2484,6 +2503,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     currentPuzzleIndex: 0,
     picked: false,
     puzzleState: null,
+    resting: null,
     seed: null,
     daily: null,
     drawn: {},

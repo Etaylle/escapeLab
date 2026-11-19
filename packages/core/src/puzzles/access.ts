@@ -736,6 +736,15 @@ export const accessModule: PuzzleModule<AccessDef, AccessState, AccessInput, Acc
     return turned || lifted ? caughtUp(def, state, at) : state;
   },
 
+  /**
+   * Doors released, the session and a login asked for stay. The token device is a clock on the
+   * wall: it stands at the period of the moment, and a lock that ran out in between is lifted —
+   * nothing the terminal counts as a miss comes of the wait.
+   */
+  resume(def, state, at) {
+    return caughtUp(def, state, at);
+  },
+
   view(def, state, viewer) {
     const audience = viewer.playerId === null;
     const role = consoleRole(viewer);

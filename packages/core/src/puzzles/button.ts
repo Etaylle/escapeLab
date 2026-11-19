@@ -300,6 +300,11 @@ export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, But
     }
   },
 
+  /** A button held as the emergency came springs back, no alarm: the hold starts over. */
+  resume(_def, state) {
+    return state.holding ? { ...state, holding: false } : state;
+  },
+
   view(_def, state, viewer) {
     return {
       kind: 'button',
