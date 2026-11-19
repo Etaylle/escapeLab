@@ -520,6 +520,7 @@ function fromTheRoom(
 
 /** What an audience connection is told that would do what only a seat of the crew does. */
 export const AUDIENCE_WATCHES =
+  // voice: interface — the door's refusal, not the lab's, names the crew
   'Das Publikum schaut zu: Geschaltet wird nur von einem Platz der Crew.';
 
 /**
