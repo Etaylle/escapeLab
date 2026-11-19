@@ -379,8 +379,9 @@ die Entscheidung.
   63 bis 70 % von 960 s; main mit der alten Folge, gleich gemessen: 242 s, 73 % von 900 s — die
   neue Folge ist für das Skript also 48 bis 97 s länger. Seit 2026-11-19 wartet der Rundgang
   auf Lücken, die auch eine um 1 s verspätete Figur noch durchlassen (auf der Flucht durch den
-  Süd-Flur 0,7 s: mehr lässt die Laborwache nie): Seed 12 gewinnt damit nach 349–351 s statt
-  333 s, 17 s mehr auf der Flucht; die Regel hält (63 %). Der Capture-Lauf lässt 38–39 % übrig
+  Süd-Flur 0,7 s: mehr lässt die Laborwache nie): Damit gewinnt das Skript nach 350 s (Seed 12),
+  310 s (56) und 365 s (93) statt 333, 290 und 337 s, das Mehr fast ganz auf der Flucht; es
+  behält 62 bis 68 %, die Regel hält. Der Capture-Lauf lässt 38–39 % übrig
   und taugt nicht als Maß: Mit ihm lag schon main mit der alten Folge bei 34 % von 900 s
   (Cloud-CI auf 32ba492, Sieg nach 554 s), seit die Capture-Blöcke gewachsen sind.
 - Wo die 48 bis 97 s liegen (ohne Capture-Gruppen, 2026-11-19; Sekunden vom Öffnen der Station

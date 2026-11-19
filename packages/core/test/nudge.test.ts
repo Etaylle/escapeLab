@@ -194,8 +194,8 @@ describe('a first crew in the shipped missions', () => {
   it('gives Blackout sixteen minutes', () => {
     // Fifteen until its chain got the Anlaufsteuerung, the Paketfilter and the Wechselplatz. The
     // rule (docs/backlog.md N-6): the scripted crew keeps at least 40 % in its slowest draw,
-    // measured without capture groups — it wins 290 to 339 s after the lights went out and
-    // keeps 63 to 70 % of this.
+    // measured without capture groups — it wins 310 to 365 s after the lights went out and
+    // keeps 62 to 68 % of this.
     expect(shipped('blackout.json').timeLimitSec).toBe(960);
   });
 });
