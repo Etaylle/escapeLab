@@ -1047,6 +1047,8 @@ A module with a clock (`dueAt`, `elapse`) has to have a `resume`: `core/test/res
 walks the registry, plays every module to its solve through two rests on 100 seeds, and holds
 each module to its row; `rest.test.ts` and the server's `restRoom.test.ts` play the Paketfilter
 and the Anlaufsteuerung through an emergency in the reducer and in a room on its timers; the
+smoke lets an emergency fall into the second wave of an open Paketfilter over real sockets, in a
+scratch mission of its own (`smoke.ts` `restProbe`, „Ruheprobe", about a minute); the
 walkthrough rests Blackout's Signalkette, where its emergency is due within the station's step,
 with a stage through (rest-goal.png, rest-kept.png — left out with the reason where none is). A
 snapshot taken in an emergency carries the resting station; one of a build before has none and
