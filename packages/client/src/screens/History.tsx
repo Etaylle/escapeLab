@@ -127,8 +127,9 @@ function tabsOf(missions: MissionInfo[], stats: MissionStats[]): { id: string; t
 }
 
 /**
- * The tabs and the difficulty, then the totals and the list of the pair picked — on the
- * Tagesschicht's tab, of the day picked (`DailyBoard`).
+ * The tabs and the difficulty, then the totals and the list of the pair picked, and under them
+ * the archive of the mission's earlier chain where it has one — on the Tagesschicht's tab, of
+ * the day picked (`DailyBoard`).
  */
 export function HistoryBoard({
   missions,
@@ -140,9 +141,8 @@ export function HistoryBoard({
 }: BoardProps) {
   const tabs = tabsOf(missions, stats);
   const title = tabs.find((tab) => tab.id === missionId)?.title ?? missionId;
-  const group = stats
-    .find((mission) => mission.missionId === missionId)
-    ?.difficulties.find((level) => level.difficulty === difficulty);
+  const shown = stats.find((mission) => mission.missionId === missionId);
+  const group = shown?.difficulties.find((level) => level.difficulty === difficulty);
   const strip = useRef<HTMLDivElement>(null);
   useEffect(() => showPressed(strip.current), [missionId]);
 
@@ -175,14 +175,19 @@ export function HistoryBoard({
       {missionId === DAILY_TAB ? (
         <DailyBoard missions={missions} difficulty={difficulty} />
       ) : (
-        <section className="history-board">
-          <h2>{`${title} · ${difficultyLabel(difficulty)}`}</h2>
-          {group === undefined ? (
-            <p className="muted">Auf dieser Stufe ist hier noch niemand gelaufen.</p>
-          ) : (
-            <Ranking group={group} />
+        <>
+          <section className="history-board">
+            <h2>{`${title} · ${difficultyLabel(difficulty)}`}</h2>
+            {group === undefined ? (
+              <p className="muted">Auf dieser Stufe ist hier noch niemand gelaufen.</p>
+            ) : (
+              <Ranking group={group} />
+            )}
+          </section>
+          {shown?.archive !== undefined && (
+            <ArchiveBoard levels={shown.archive} difficulty={difficulty} />
           )}
-        </section>
+        </>
       )}
     </>
   );
@@ -238,21 +243,85 @@ export function DailyDays({
           </button>
         ))}
       </div>
-      {day.missions.map((mission) => {
-        const group = mission.difficulties.find((level) => level.difficulty === difficulty);
-        const shift = `Tagesschicht ${dailyLabel(day.day)}`;
-        return (
-          <section key={mission.missionId} className="history-board">
-            <h2>{`${titleOf(mission.missionId)} · ${shift} · ${difficultyLabel(difficulty)}`}</h2>
-            {group === undefined ? (
-              <p className="muted">Auf dieser Stufe ist an diesem Tag niemand gelaufen.</p>
-            ) : (
-              <Ranking group={group} />
-            )}
-          </section>
-        );
-      })}
+      {day.missions.map((mission) => (
+        <DailyMission
+          key={mission.missionId}
+          mission={mission}
+          heading={`${titleOf(mission.missionId)} · Tagesschicht ${dailyLabel(day.day)}`}
+          difficulty={difficulty}
+        />
+      ))}
     </>
+  );
+}
+
+/**
+ * One mission on a day of the Tagesschicht: its board, then its archive where the day has runs
+ * of an earlier chain — only the archive where the day has nothing else, a day before the
+ * mission was rebuilt.
+ */
+function DailyMission({
+  mission,
+  heading,
+  difficulty,
+}: {
+  mission: MissionStats;
+  heading: string;
+  difficulty: Difficulty;
+}) {
+  const group = mission.difficulties.find((level) => level.difficulty === difficulty);
+  const onlyArchive = mission.difficulties.length === 0 && mission.archive !== undefined;
+  return (
+    <>
+      {!onlyArchive && (
+        <section className="history-board">
+          <h2>{`${heading} · ${difficultyLabel(difficulty)}`}</h2>
+          {group === undefined ? (
+            <p className="muted">Auf dieser Stufe ist an diesem Tag niemand gelaufen.</p>
+          ) : (
+            <Ranking group={group} />
+          )}
+        </section>
+      )}
+      {mission.archive !== undefined && (
+        <ArchiveBoard levels={mission.archive} difficulty={difficulty} of={heading} />
+      )}
+    </>
+  );
+}
+
+/** What the archive's board is called, here and in „Meine Einsätze" (MyRuns.tsx). */
+export const ARCHIVE_NAME = 'Frühere Anlage';
+
+/**
+ * The board of a mission's earlier chain of stations (`MissionStats.archive`), under its live
+ * one: the same totals and fastest crews, ranked among the runs of that chain alone, and a line
+ * saying why they stand apart. `of` names the mission and the day on the Tagesschicht's tab,
+ * where the boards of several missions stand one under the other.
+ */
+export function ArchiveBoard({
+  levels,
+  difficulty,
+  of,
+}: {
+  levels: readonly DifficultyStats[];
+  difficulty: Difficulty;
+  of?: string;
+}) {
+  const group = levels.find((level) => level.difficulty === difficulty);
+  const name = of === undefined ? ARCHIVE_NAME : `${of} · ${ARCHIVE_NAME}`;
+  return (
+    <section className="history-board history-archive">
+      <h2>{`${name} · ${difficultyLabel(difficulty)}`}</h2>
+      <p className="history-archive-note">
+        Das Labor wurde umgebaut. Diese Zeiten liefen noch auf der früheren Anlage.
+      </p>
+      {group === undefined ? (
+        <p className="muted">Auf dieser Stufe ist auf der früheren Anlage niemand gelaufen.</p>
+      ) : (
+        <Ranking group={group} />
+      )}
+    </section>
   );
 }
 

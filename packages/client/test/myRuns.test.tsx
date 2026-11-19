@@ -88,6 +88,29 @@ describe('„Meine Einsätze"', () => {
     expect(html).toContain('Die letzten 1 von 5 Einsätzen.');
   });
 
+  it('marks a run of an earlier chain with its board’s name, one on no board as out of it', () => {
+    const html = renderToStaticMarkup(
+      <MyRunsTable
+        mine={{
+          runs: [
+            run(),
+            run({ board: 'archive', finishedAt: DAY - 1 }),
+            run({ board: 'archive', daily: '2026-11-12', finishedAt: DAY - 2 }),
+            run({ board: 'none', finishedAt: DAY - 3 }),
+          ],
+          total: 4,
+        }}
+        missions={[blackout]}
+      />,
+    );
+    expect(rowsOf(html).map((row) => row[0])).toEqual([
+      'Blackout im LaborNormal',
+      'Blackout im LaborNormal · Frühere Anlage',
+      'Blackout im LaborNormal · Tagesschicht 12.11. · Frühere Anlage',
+      'Blackout im LaborNormal · Außer Wertung',
+    ]);
+  });
+
   it('says so where the account played none, and while it waits or failed', () => {
     const none = renderToStaticMarkup(<MyRunsTable mine={{ runs: [], total: 0 }} missions={[]} />);
     expect(none).toContain('Noch kein Einsatz mit diesem Konto.');
