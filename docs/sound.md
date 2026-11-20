@@ -383,7 +383,12 @@ at −28.9 dBFS. Open, it pulls the lab's stems from −52.0 to −82.0 and the 
 room, −47.5) to −65.5: its tune stands 23 dB over any bed and 40 over the music. Under a radio
 line (RMS about −31.3) the tune sits at −54.2 and a shot's peak at −40.9: the line stands some
 23 dB over the tune, as the lab's own music, now 12 dB down, stands under it. Closing the machine stops
-every note it laid ahead and lets its graph go.
+every note it laid ahead and lets its graph go. Ferret Flush (`arcade/flush/audio.ts`,
+`flush/music.ts`) has no context of its own either: the same outlet gives it the lab's context and
+the effects' bus, its Info's „Musik" and „Effekte" and its sound switch sit before one gain that
+follows the same pulls (`MACHINE_DB`), and the machine's door pulls the lab's music and beds for it
+as for Ferret vs Ducks. A pause holds its sound by a gain, not by suspending the context the lab
+shares. Its levels were not measured against the lab's as Ferret vs Ducks's were.
 
 ## What a page keeps (`samples.ts`, `audioStream.ts`, `audioMemory.ts`)
 

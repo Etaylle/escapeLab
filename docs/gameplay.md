@@ -1558,10 +1558,20 @@ is what an audience costs.
 
 ## The break-room machine
 
-The plant has an arcade machine in its break room: „Ferret vs Ducks", Uros's own game, as he made
-it and modernised it (`client/src/arcade/`, its simulation ported from his reference and replayed
-against the original's frozen rules). Waiting is where a crew loses people; the machine is for the
-wait, and has no say in a room.
+The plant has an arcade machine in its break room with two of Uros's own games, as he made them
+and modernised them: „Ferret vs Ducks" and „Ferret Flush" (`client/src/arcade/`, each simulation
+ported from his reference and replayed against the original's frozen rules). Waiting is where a
+crew loses people; the machine is for the wait, and has no say in a room.
+
+**The select.** The machine opens on „SPIELAUSWAHL": two large cards, each with the game's name,
+one line and a picture its own code draws — „Ein Frettchen verteidigt seinen Bau gegen einen
+Schwarm Enten." and „Ein Schießstand im Sumpf: drei Patronen, zehn Ziele je Runde." A click or a
+tap takes a card; ← → (and ↑ ↓) or 1 · 2 light one, Enter takes it, Esc leaves the machine. The
+game played last is lit when it opens (`escapelab-arcade-last`, guarded: a store that refuses
+lights the first). „Zurück" — „Zur Spielauswahl" in Ferret vs Ducks, „← Zurück" in Ferret Flush —
+leads from a game to the select, its game paused; from the select, „Zurück" leaves the machine
+(`arcade/Cabinet.tsx`, `arcade/select.ts`). The select is a small chunk of its own; each game is
+another, loaded the first time its card is taken (and its picture with the select).
 
 **Where it opens.** „Arcade" in the main menu, after „Demo" (on a phone held sideways it goes from
 the column with the editor, the QR code and the settings, under the menu's seven-item rule); in a
@@ -1597,7 +1607,28 @@ the field is the page — the HUD beside it on a wide window, over it on an upri
 buttons under it within reach. Klassisch plays exactly as the original (commit 49dc727 of Uros's
 game); Modern plays its first wave so too and adds, from wave 2, a multiplier for hits in a row,
 the visitor's pickups (Streuschuss, Schild, Zeitlupe), ducks that dive, helmet ducks, formations
-and the Great Drake every fifth wave. It comes as a chunk of its own the first time it opens.
+and the Great Drake every fifth wave.
+
+**Ferret Flush** (`arcade/flush/`) is a shooting range in the marsh: three games — „Eine Ente",
+„Zwei Enten", „Tontauben" —, three shells and ten targets a round, a pass mark that climbs, the
+ferret that flushes the birds and brings them back. Klassisch plays exactly as the original
+(commit b22d4e4 of Uros's game, all three games replayed against its frozen rules); Modern plays
+its first round so too and adds hits in a row (×2 from the fourth, ×3 from the eighth), a rare
+golden duck worth ten times as much, a bonus for a round without a wasted shell, the decoy line
+after rounds two, four and six, wind and flight patterns, and a touch aim that helps a finger.
+Its HUD is a slim bar over the field (beside it on a phone held sideways, over its sky where the
+page is short): the round and the game, the strip of ten targets, the score and the best, and
+Pause, Info, Ton and „← Zurück". Keys: 1 · 2 · 3 a game, Enter or Space starts it (and the same
+one again at the end), P pauses, Q while paused back to the three games, M the sound, I the Info
+(Spielanleitung, Die Spiele, Punkte, Feldführer, Ton & Touch, Rekorde); Esc pauses a game, leads
+from the end to the three games and from the three games to the select. Aiming is the mouse or a
+finger inside the field: the sight is the game's own (no cursor over it), and a drag or a double
+tap neither scrolls nor selects nor zooms; a press on the field stays the field's and never
+reaches the lobby or the run under the machine. Its bests and settings stay in this browser
+(`escapelab-flush-best-classic`, `-modern`, `escapelab-flush-settings`, `-muted`).
+
+Both games follow the door's rules above: either closes the moment what was waited for comes,
+paused for the next time, and neither sends anything.
 
 ## QR-Codes: onto another device
 

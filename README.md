@@ -157,10 +157,12 @@ Thema: hell für einen gewonnenen, ein tiefes Dröhnen für einen verlorenen Ein
 alle Geräusche sind mit ElevenLabs erzeugt, keine Archivmusik (`docs/sound.md`, Abschnitt „Lizenz“).
 
 **Spielautomat im Pausenraum:** *Arcade* im Menü, „Arcade" in der Lobby und auf jeder Karte, die
-warten lässt — die eigene Leitung weg, die Wartung, jemand aus der Crew fehlt — öffnet „Ferret vs
-Ducks", das Spiel von Uros, als Automaten des Werks: klassisch genau wie das Original oder modern
-(ab Welle 2 Kombos, Extras, Sturzflieger, Helme, alle fünf Wellen ein Boss), mit Tastatur oder
-Touch, die Rekorde in diesem Browser. Er sendet nichts und ändert nichts am Einsatz; kommt, worauf
+warten lässt — die eigene Leitung weg, die Wartung, jemand aus der Crew fehlt — öffnet den
+Automaten des Werks mit zwei Spielen von Uros zur Auswahl: „Ferret vs Ducks" (ab Welle 2 Kombos,
+Extras, Sturzflieger, Helme, alle fünf Wellen ein Boss) und „Ferret Flush" (ein Schießstand im
+Sumpf: eine Ente, zwei Enten oder Tontauben; modern mit Serien, goldener Ente, Lockvogelreihe und
+Wind) — jedes klassisch genau wie das Original oder modern, mit Tastatur, Maus oder Touch, die
+Rekorde in diesem Browser, das zuletzt gespielte vorgewählt. Er sendet nichts und ändert nichts am Einsatz; kommt, worauf
 gewartet wurde — der Start, die Leitung, die Anlage, der Einsatz geht weiter —, pausiert das Spiel,
 der Automat schließt sich, und eine Zeile sagt warum („Die Schicht beginnt."). Musik und
 Raumklang des Labors treten so lange zurück (`docs/gameplay.md`, „The break-room machine").

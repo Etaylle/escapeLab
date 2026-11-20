@@ -18,9 +18,10 @@ die Entscheidung.
   Bestenliste auf dem Server je Schwierigkeit und Regelwerk, Klassisch und Modern getrennt, an
   das Konto gebunden; Punkte prüfbar machen (der Server spielt nicht mit, also nur plausibel).
 
-### W-arcade-3 Ein zweites Spiel im Automaten — Status: wartet · Größe: M
-- Der Pausenraum-Automat (`client/src/arcade/`) zeigt ein Spiel. Ein zweites eigenes Spiel
-  daneben, wählbar im Automatenmenü, als eigener Chunk.
+### W-arcade-3 Ein zweites Spiel im Automaten — Status: erledigt (W-arcade2) · Größe: M
+- „Ferret Flush" neben „Ferret vs Ducks": eine Spielauswahl mit zwei Karten, das zuletzt
+  gespielte vorgewählt, jedes Spiel ein eigener Chunk (`client/src/arcade/Cabinet.tsx`,
+  `arcade/flush/`).
 
 ### F-1 Fundament-Fehler der Rückmeldung — Status: erledigt (N-foundation, Merge 2026-11-01) · Größe: M
 - Pause hält die Uhr nur auf dem Server an: HUD-Countdown, Pieptöne und der Schlag bei 0
