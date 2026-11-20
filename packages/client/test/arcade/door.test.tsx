@@ -170,11 +170,14 @@ describe('the machine as the page carries it', () => {
     expect(sourceOf('arcade/ArcadeDoor')).toContain("lazy(() => import('./Machine.js'))");
   });
 
-  it('sends nothing: it reaches the lab only for its sound, never the line or the server', () => {
+  it('sends nothing: it reaches the lab for its sound and the run’s clock, never the line', () => {
     const inMachine = (m: string): boolean => m.startsWith('arcade/');
     const machine = [...graphOf('arcade/Machine', inMachine), ...graphOf('arcade/ArcadeDoor', inMachine)];
     expect(machine).toContain('arcade/session');
+    // The clock and the server's time, read for the run's clock on the frame; the mix for the sound.
     expect([...new Set(machine.filter((m) => !inMachine(m)))].sort()).toEqual([
+      'clock',
+      'hooks',
       'world/audio',
       'world/mix',
     ]);

@@ -1,4 +1,6 @@
 import type { Game } from './rules.js';
+import type { MissionTime } from '../clock.js';
+import { RunLine } from './RunLine.js';
 import { current } from './rules.js';
 import { chipsOf, type Banner, type Session } from './session.js';
 import { CHIP_LABELS, DIFFICULTY_LABELS, TITLE, pad } from './texts.js';
@@ -11,14 +13,15 @@ import type { PickupKind } from './rules.js';
  * screen, the buttons.
  */
 
-/** The frame's head and the HUD around the field. */
-export function Hud({ s, onLeave }: { s: Session; onLeave: () => void }) {
+/** The frame's head and the HUD around the field, and the run's clock where one goes on (`run`). */
+export function Hud({ s, onLeave, run }: { s: Session; onLeave: () => void; run: MissionTime | null }) {
   return (
     <header className="arcade-hud">
       <div className="arcade-name">
         <span className="arcade-kicker">PAUSENRAUM · SPIELAUTOMAT</span>
         <h1>{TITLE}</h1>
       </div>
+      {run !== null && <RunLine run={run} />}
       <Stats s={s} />
       <HudButtons s={s} onLeave={onLeave} />
     </header>

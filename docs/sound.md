@@ -370,7 +370,10 @@ loop, on the frame their step lands or their leaf starts to move.
 its chiptune loop, as Uros's game did, through two gains of its own (its Info's „Musik" and
 „Effekte") behind its own sound switch, into one bus of the lab's: the effects' (`mix.sfx`). The
 lab's „Effekte", its „Gesamt" and the sound switch reach the machine there, and the brickwall
-covers it; the effects' send gives it a touch of the room it stands in. Closing the machine stops
+covers it; the effects' send gives it a touch of the room it stands in. The run's sounds stand
+over it: one gain of the machine's follows the mix's pulls (`followDucks`, `MACHINE_DB`), so that
+mission control's voice pulls the machine 10 dB down and the klaxon, the alarm's sting and the
+siren 8 dB, while the machine pulls neither the radio, the loudspeakers nor the effects. Closing the machine stops
 every note it laid ahead and lets its graph go.
 
 ## What a page keeps (`samples.ts`, `audioStream.ts`, `audioMemory.ts`)

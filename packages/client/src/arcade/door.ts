@@ -44,6 +44,12 @@ export function waitOf(f: WaitFacts): Wait {
   return f.missing ? 'crew' : null;
 }
 
+/**
+ * Whether the run goes on around the player meanwhile, its clock running: somebody of the crew
+ * away, or the own line down.
+ */
+export const runGoesOn = (wait: Wait): boolean => wait === 'crew' || wait === 'line';
+
 /** What the plant says as the machine closes because the wait `from` is over. */
 const LINES: Readonly<Record<'lobby' | 'line' | 'pause' | 'crew', string>> = {
   lobby: 'Die Schicht beginnt.',

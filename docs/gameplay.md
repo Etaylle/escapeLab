@@ -1571,6 +1571,10 @@ card (the line down, the server's restart, the room being restored), on the main
 („WARTUNG · Warten auf Ben"), and in the bar from the first moment somebody of the crew is away
 — the run goes on around the player then, and the machine stands over it as the pause menu does.
 While a run is live and nothing is waited for it cannot be opened (`arcade/door.ts` `waitOf`).
+While the run goes on around the player — somebody of the crew away, the own line down — the
+machine's frame says so in the plant's voice, the run's clock beside it as its HUD shows it: „Die
+Uhr des Einsatzes läuft weiter · 15:36" (`arcade/RunLine.tsx`); the run's radio and its alarms
+are heard over the machine, which goes down under them (docs/sound.md).
 
 **When it closes.** The moment what was waited for comes, the machine closes on its own, its game
 paused for the next time, and one line in the plant's voice says why, over the screen for 3.5 s:

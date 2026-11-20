@@ -104,6 +104,18 @@
   color: var(--arcade-text);
 }
 
+/* The run going on around the player: its clock, said in the plant's voice, over everything. */
+.arcade-run {
+  flex: 1 0 100%;
+  order: -1;
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--warn);
+  background: #1a1408;
+  color: #fde68a;
+  font-variant-numeric: tabular-nums;
+}
+
 .arcade-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -212,6 +224,15 @@
     grid-column: 1;
     grid-row: 1;
     justify-self: end;
+  }
+
+  .arcade--playing .arcade-run {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    justify-self: end;
+    max-width: 100%;
+    margin: 0 12px 12px;
   }
 
   .arcade--playing .arcade-buttons {

@@ -8,12 +8,23 @@
  */
 import { Music, type MusicOut } from './music.js';
 
-/** Where the machine's sound goes: the lab's context and the node it plays into; or none. */
-export type Outlet = () => { ctx: AudioContext; destination: AudioNode } | null;
+/**
+ * Where the machine's sound goes: the lab's context, the node it plays into, and the way its
+ * gain follows the run's sounds — pulled down under the radio and the alarms (mix.ts
+ * `followDucks`); or none without sound.
+ */
+export type Outlet = () => {
+  ctx: AudioContext;
+  destination: AudioNode;
+  follow: (param: AudioParam) => () => void;
+} | null;
 
 interface Graph {
   ctx: AudioContext;
   master: GainNode;
+  /** under the run's radio and alarms: the machine goes down, never they */
+  duck: GainNode;
+  unfollow: () => void;
   effects: GainNode;
   music: GainNode;
 }
@@ -87,15 +98,24 @@ export class ArcadeAudio {
     const out = this.outlet();
     if (out === null) return null;
     const { ctx, destination } = out;
+    const duck = ctx.createGain();
+    duck.connect(destination);
     const master = ctx.createGain();
-    master.connect(destination);
+    master.connect(duck);
     const gain = (value: number): GainNode => {
       const node = ctx.createGain();
       node.gain.value = value;
       node.connect(master);
       return node;
     };
-    this.graph = { ctx, master, effects: gain(this.volumes.effects), music: gain(this.volumes.music) };
+    this.graph = {
+      ctx,
+      master,
+      duck,
+      unfollow: out.follow(duck.gain),
+      effects: gain(this.volumes.effects),
+      music: gain(this.volumes.music),
+    };
     return this.graph;
   }
 
@@ -119,7 +139,8 @@ export class ArcadeAudio {
   close(): void {
     this.stop();
     this.stopMusic();
-    this.graph?.master.disconnect();
+    this.graph?.unfollow();
+    this.graph?.duck.disconnect();
     this.graph = null;
   }
 

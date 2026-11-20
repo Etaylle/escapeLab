@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { audioEngine } from '../world/audio.js';
+import { MACHINE_DB, followDucks } from '../world/mix.js';
+import type { MissionTime } from '../clock.js';
 import { HEIGHT, WIDTH } from './rules.js';
 import { MOVE_KEYS } from './input.js';
 import { Session, BANNER_MS } from './session.js';
@@ -23,7 +25,10 @@ let sitting: Session | null = null;
 function session(): Session {
   sitting ??= new Session(() => {
     const engine = audioEngine();
-    return engine === null ? null : { ctx: engine.ctx, destination: engine.sfx };
+    if (engine === null) return null;
+    const follow = (param: AudioParam): (() => void) =>
+      followDucks(engine, param, MACHINE_DB, engine.ctx.currentTime);
+    return { ctx: engine.ctx, destination: engine.sfx, follow };
   });
   return sitting;
 }
@@ -190,7 +195,11 @@ function Field({ s, canvas, onLeave }: { s: Session; canvas: React.RefObject<HTM
   );
 }
 
-export default function Machine({ onLeave }: { onLeave: () => void }) {
+/**
+ * The machine over the lab: `run` is the run that goes on around the player meanwhile — its clock
+ * said on the frame —, null where none runs (the menu, a lobby, the server's maintenance).
+ */
+export default function Machine({ onLeave, run }: { onLeave: () => void; run: MissionTime | null }) {
   const s = session();
   useSyncExternalStore(s.subscribe, s.getVersion);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -213,7 +222,7 @@ export default function Machine({ onLeave }: { onLeave: () => void }) {
       aria-modal="true"
       aria-label={`Spielautomat: ${TITLE}`}
     >
-      <Hud s={s} onLeave={leave} />
+      <Hud s={s} onLeave={leave} run={run} />
       <div className="arcade-stage">
         <Field s={s} canvas={canvas} onLeave={leave} />
         {!playing && <MachineMenu s={s} onLeave={leave} />}

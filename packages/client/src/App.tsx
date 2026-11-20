@@ -66,7 +66,7 @@ import { UpdateNotice } from './screens/Install.js';
 import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
 import { ArcadeHost, WaitContext, useArcadeDoor } from './arcade/ArcadeDoor.js';
-import { useDoor, type WaitFacts } from './arcade/door.js';
+import { runGoesOn, useDoor, type WaitFacts } from './arcade/door.js';
 import {
   DoorWipe,
   doorsGoing,
@@ -1104,7 +1104,7 @@ export function App({ boot }: { boot: EditorBoot }) {
         covered={covered}
       />
       <RoomMenus layer={layer} menus={menus} live={live} missions={missions} profile={profile} />
-      <ArcadeHost />
+      <ArcadeHost run={runGoesOn(wait) ? live.view : null} />
       <ErrorBanner conn={live} />
       <UpdateNotice />
 

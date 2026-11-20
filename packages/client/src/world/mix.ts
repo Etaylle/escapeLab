@@ -249,6 +249,8 @@ export function levelOn(knots: readonly Knot[], t: number): number {
 
 /** What each mix is pulled by now, and the knots each of its ducks was last set on. */
 const pulls = new WeakMap<Mix, Map<DuckSource, Dip>>();
+/** Gains outside the buses that the pulls of a mix move too, each by depths of its own. */
+const followers = new WeakMap<Mix, Map<AudioParam, Depths>>();
 const laid = new WeakMap<AudioParam, Knot[]>();
 
 /** Lays the knots of `dips` on the duck `param` from `now`, from where its last ones had it. */
@@ -276,6 +278,27 @@ function pull(mix: Mix, source: DuckSource, dip: Dip, now: number): void {
   pulls.set(mix, dips);
   lay(mix.musicDuck.gain, dips, DUCK_DB.music, now);
   lay(mix.ambienceDuck.gain, dips, DUCK_DB.ambience, now);
+  for (const [param, depths] of followers.get(mix) ?? []) lay(param, dips, depths, now);
+}
+
+/**
+ * How far the run's voice, its klaxon and its siren pull the break-room machine down (arcade/),
+ * dB: the run's sounds stand over the machine, never the other way round.
+ */
+export const MACHINE_DB: Depths = { voice: -10, alarm: -8, siren: -8 };
+
+/**
+ * The gain `param` follows the pulls of `mix` from `now`, by `depths`, as the buses do — set at
+ * once to where the pulls in force put it. Returns what lets it go.
+ */
+export function followDucks(mix: Mix, param: AudioParam, depths: Depths, now: number): () => void {
+  const own = followers.get(mix) ?? new Map<AudioParam, Depths>();
+  followers.set(mix, own);
+  own.set(param, depths);
+  lay(param, pulls.get(mix) ?? new Map(), depths, now);
+  return () => {
+    own.delete(param);
+  };
 }
 
 /**

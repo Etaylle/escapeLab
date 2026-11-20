@@ -1,6 +1,7 @@
 import { createContext, lazy, Suspense, useContext, useEffect, useRef } from 'react';
 import { duck, unduck } from '../world/mix.js';
 import { liveEngine } from '../world/audio.js';
+import type { MissionTime } from '../clock.js';
 import {
   clearLine,
   closeArcade,
@@ -68,8 +69,12 @@ export function ArcadeButton({ className = '' }: { className?: string }) {
   );
 }
 
-/** The machine over everything while it stands open; the plant's line as it closed by itself. */
-export function ArcadeHost() {
+/**
+ * The machine over everything while it stands open; the plant's line as it closed by itself.
+ * `run`: the run going on around the player while the machine stands open, its clock said on the
+ * machine's frame; null where none runs.
+ */
+export function ArcadeHost({ run }: { run: MissionTime | null }) {
   const { open, line } = useDoor();
   useEffect(() => {
     if (line === null) return undefined;
@@ -80,7 +85,7 @@ export function ArcadeHost() {
     <>
       {open && (
         <Suspense fallback={null}>
-          <Machine onLeave={() => closeArcade()} />
+          <Machine onLeave={() => closeArcade()} run={run} />
         </Suspense>
       )}
       {line !== null && (
