@@ -17213,6 +17213,7 @@ async function benAway({ anna, ben }) {
   const badge = await lineOf(anna.page.locator('.hud-crew li.hud-away'));
   const card = await anna.page.locator('.overlay.pause').count();
   await capture(anna.page, 'away-badge.png');
+  await arcadeWhileAway(anna);
   await captureBound(anna);
   const { offered, ran } = await annaGoesOn(anna, from);
   const offeredAfter = offered - since;
@@ -19254,7 +19255,9 @@ async function lobbyStage() {
   await inGroup('screens', () => capturePauseMenuPhone(guest));
   const anna = { name: 'Anna', page: host, seen: hostSeen, traced: true };
   const ben = { name: 'Ben', page: guest, seen: guestSeen };
+  const playing = await inGroup('screens', () => arcadeInLobby(ben).then(() => true));
   await startTheRun(anna, ben, lobbySound);
+  if (playing === true) await inGroup('screens', () => arcadeClosedByStart(ben));
   return { code, anna, ben };
 }
 
@@ -19282,6 +19285,7 @@ async function hostOpensRound() {
   // The menu, its music as the music's manifest lists it (`captureMenu` returns the list).
   const musicList = await inGroup('screens', () => captureMenu(host));
   await inGroup('screens', () => captureMenuQr(host));
+  await inGroup('screens', () => captureArcadeMenu(host));
   await inGroup('screens', () => captureHistory(host, 'history.png', heldClick));
   await inGroup('screens', () => captureArchive(host));
   await openMissionRound(host);
@@ -19337,6 +19341,111 @@ async function guestJoins(code) {
 }
 
 /**
+ * The break-room machine (arcade/), opened from the main menu's „Arcade" on the host's laptop:
+ * its own menu over its attract screen (menu-arcade.png), a game started and played on the keys
+ * a moment (arcade-play.png, the field as the page), then Esc pauses it and Esc again closes the
+ * machine, the menu back under it.
+ */
+async function captureArcadeMenu(page) {
+  await page.locator('.menu-item[data-item="arcade"]').click();
+  await page.locator('.arcade .arcade-menu').waitFor({ timeout: 10_000 });
+  await sleep(500);
+  await capture(page, 'menu-arcade.png');
+  await page.locator('.arcade .arcade-primary').click();
+  await page.keyboard.down('ArrowLeft');
+  await page.keyboard.down('Space');
+  await sleep(1500);
+  await page.keyboard.up('ArrowLeft');
+  await page.keyboard.up('Space');
+  const field = await page.locator('.arcade-field').boundingBox();
+  const view = page.viewportSize();
+  await capture(page, 'arcade-play.png');
+  await arcadeLeave(page, 'arcade-play.png');
+  const share = field === null || view === null ? 0 : field.height / view.height;
+  console.log(`arcade-play.png    the field ${Math.round(share * 100)} % of the window's height`);
+  if (share < 0.9) fail(`arcade-play.png: the field takes ${Math.round(share * 100)} % of the height, not the page`);
+}
+
+/** Esc pauses the machine's game, Esc again closes the machine; fails where it stays open. */
+async function arcadeLeave(page, label) {
+  await page.keyboard.press('Escape');
+  await page.locator('.arcade-card').waitFor({ timeout: 3000 });
+  await page.keyboard.press('Escape');
+  if (!(await untilAsync(async () => (await page.locator('.arcade').count()) === 0, 3000))) {
+    fail(`${label}: the machine did not close on Esc`);
+  }
+}
+
+/**
+ * The machine on the guest's phone held upright, by touch: opened from the menu, a game on the
+ * touch buttons, the fire held a moment (arcade-phone.png), and closed again.
+ */
+async function captureArcadePhone(guest) {
+  await guest.locator('.menu-item[data-item="arcade"]').click();
+  await guest.locator('.arcade .arcade-menu').waitFor({ timeout: 10_000 });
+  await guest.locator('.arcade-segments button', { hasText: 'Touch' }).click();
+  await guest.locator('.arcade .arcade-primary').click();
+  const fire = guest.locator('.arcade-touch .arcade-fire');
+  await fire.waitFor({ timeout: 3000 });
+  const box = await fire.boundingBox();
+  if (box !== null) {
+    await guest.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await guest.mouse.down();
+    await sleep(1200);
+    await guest.mouse.up();
+  }
+  await capture(guest, 'arcade-phone.png');
+  await arcadeLeave(guest, 'arcade-phone.png');
+}
+
+/**
+ * Ben, ready in the lobby, plays the machine while the crew gathers (lobby-arcade.png); the run
+ * started by the host then closes it on his page with the plant's line (`arcadeClosedByStart`).
+ */
+async function arcadeInLobby(ben) {
+  if (ben.seen.view?.you?.ready !== true) {
+    await clickText(ben.page, 'Ich bin bereit');
+  }
+  await ben.page.locator('.lobby-foot .arcade-open').click();
+  // His game from the menu waits paused: its card's first way plays on.
+  await ben.page.locator('.arcade .arcade-primary').click({ timeout: 10_000 });
+  await sleep(1500);
+  await capture(ben.page, 'lobby-arcade.png');
+}
+
+/** The run came up: the machine on Ben's page is closed, and the plant said why. */
+async function arcadeClosedByStart(ben) {
+  const open = await ben.page.locator('.arcade').count();
+  const line = await textOf(ben.page.locator('.arcade-line'));
+  console.log(`lobby-arcade.png   the run started: the machine ${open ? 'still open' : 'closed'}, „${line ?? ''}"`);
+  if (open !== 0 || line !== 'Die Schicht beginnt.') {
+    fail(`the run's start left the machine ${open ? 'open' : 'closed without its line'} on Ben's page`);
+  }
+}
+
+/**
+ * Anna waits for Ben, away: the machine from her bar over the run (wait-arcade.png), played on the
+ * world's keys, which move nothing in the run — her avatar stays where it stood and her page sends
+ * no line, no ping —; then closed for the way on.
+ */
+async function arcadeWhileAway(anna) {
+  await anna.page.locator('.away-offer .arcade-open').click();
+  await anna.page.locator('.arcade .arcade-primary').click({ timeout: 10_000 });
+  const at = { ...anna.seen.pos };
+  const sent = anna.seen.sent.length;
+  await anna.page.keyboard.down('ArrowRight');
+  await anna.page.keyboard.down('Space');
+  await sleep(1200);
+  await anna.page.keyboard.up('ArrowRight');
+  await anna.page.keyboard.up('Space');
+  await capture(anna.page, 'wait-arcade.png');
+  const moved = anna.seen.pos?.x !== at.x || anna.seen.pos?.y !== at.y;
+  console.log(`wait-arcade.png    the world's keys on the machine: avatar ${moved ? 'moved' : 'stood'}, ${anna.seen.sent.length - sent} line(s) sent`);
+  if (moved || anna.seen.sent.length !== sent) fail('wait-arcade.png: the machine reached the run');
+  await arcadeLeave(anna.page, 'wait-arcade.png');
+}
+
+/**
  * The menu on the guest's phone: upright over its scene (menu-phone.png), turned sideways
  * (`checkMenuPhones`), and its history (history-phone.png).
  */
@@ -19346,6 +19455,7 @@ async function guestMenu(guest) {
   await checkMenuLines(guest, 'menu-phone.png');
   await checkMenuPhones(guest);
   await captureHistory(guest, 'history-phone.png');
+  await captureArcadePhone(guest);
 }
 
 /**

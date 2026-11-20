@@ -54,6 +54,7 @@ export const GROUPS = [
     captures: [
       'reconnect',
       'away-badge.png',
+      'wait-arcade.png',
       'menu-bound.png',
       'continue-without.png',
       'reconnect-overlay.png',
@@ -178,6 +179,8 @@ export const GROUPS = [
     captures: [
       'menu.png',
       'menu-qr.png',
+      'menu-arcade.png',
+      'arcade-play.png',
       'menu-hero.png',
       'menu-hero-hover.png',
       'menu-place-handbook.png',
@@ -203,6 +206,8 @@ export const GROUPS = [
       'menu-phone.png',
       'menu-phone-932.png',
       'history-phone.png',
+      'arcade-phone.png',
+      'lobby-arcade.png',
       'lobby-filled.png',
       'menu-open-rounds.png',
       'lobby-chrome.png',
