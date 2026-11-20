@@ -65,6 +65,8 @@ import { Icon, type IconName } from './screens/Icon.js';
 import { UpdateNotice } from './screens/Install.js';
 import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
+import { ArcadeHost, WaitContext, useArcadeDoor } from './arcade/ArcadeDoor.js';
+import { runGoesOn, useDoor, type WaitFacts } from './arcade/door.js';
 import {
   DoorWipe,
   doorsGoing,
@@ -78,7 +80,8 @@ import {
 import { createRoomMessage, pickedMission, usePicked } from './screens/MenuPanels.js';
 import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
-import type { GameLine } from './screens/Line.js';
+import { lineLost, type GameLine } from './screens/Line.js';
+import { missesSomebody } from './screens/Pause.js';
 import { DemoScreen } from './screens/Demo.js';
 import { EndScreen } from './screens/End.js';
 import { MenuLayers, type RoomCrew, type RoomMission } from './screens/MenuLayers.js';
@@ -1017,6 +1020,22 @@ export function AppBar(props: {
 }
 
 /**
+ * What the break-room machine's door (arcade/door.ts) needs of the line `conn`: whether it is off
+ * any room, the room's phase, and — in a run — whether the player waits for the own line, for
+ * the server's maintenance, or for somebody of the crew away.
+ */
+export function waitFactsOf(conn: Connection): WaitFacts {
+  const view = conn.view;
+  return {
+    offRoom: view === null && conn.spectatorView === null,
+    phase: view?.phase ?? null,
+    lineLost: lineLost(lineOf(conn), view),
+    maintenance: view !== null && view.pausedAt !== null,
+    missing: view !== null && missesSomebody(view),
+  };
+}
+
+/**
  * The app. `boot` is what the address asked for on load: the editor at
  * /editor, with a shared mission or the draft the tab kept.
  */
@@ -1042,7 +1061,9 @@ export function App({ boot }: { boot: EditorBoot }) {
   const testRun = useTestRun(live);
   const offRoom = conn.view === null && conn.spectatorView === null;
   const { layer, menus } = useRoomMenus(live, offRoom);
-  const covered = anyOpen(layer);
+  const wait = useArcadeDoor(waitFactsOf(live));
+  const machine = useDoor();
+  const covered = anyOpen(layer) || machine.open;
   // The profile's one name: the bar shows it, the menu's panels and the settings type it.
   const [name, setName] = useProfileName(live.account, live.send, live.status === 'open');
   const profile = { name, onName: setName };
@@ -1083,12 +1104,14 @@ export function App({ boot }: { boot: EditorBoot }) {
         covered={covered}
       />
       <RoomMenus layer={layer} menus={menus} live={live} missions={missions} profile={profile} />
+      <ArcadeHost run={runGoesOn(wait) ? live.view : null} />
       <ErrorBanner conn={live} />
       <UpdateNotice />
 
       <ScreenArea ref={contentRef} layout={layout} covered={covered} openPause={layer.openPause}>
         {backdrop !== null && <MenuScene {...backdrop} />}
         <VoiceContext value={voice}>
+          <WaitContext value={wait}>
           <Screens
             conn={conn}
             missions={missions}
@@ -1105,6 +1128,7 @@ export function App({ boot }: { boot: EditorBoot }) {
             name={name}
             onName={setName}
           />
+          </WaitContext>
         </VoiceContext>
       </ScreenArea>
     </div>

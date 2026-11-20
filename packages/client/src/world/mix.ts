@@ -20,7 +20,8 @@
  * out from those settings (`limiterMakeup`), which the trim takes back, so the mix under the
  * threshold plays as loud as before. Ducking (`duck`): mission control's voice pulls the music
  * 12 dB and the beds 4 dB down, the crew's voices the music 8 dB, the klaxon and the siren the
- * music 6 dB, a preview the music 24 dB; where several pull at once the deepest holds. A bus goes down over DUCK_ATTACK_S and
+ * music 6 dB, a preview the music 24 dB, the break-room machine the music 30 dB and the beds
+ * 18 dB; where several pull at once the deepest holds. A bus goes down over DUCK_ATTACK_S and
  * comes back over DUCK_RELEASE_S, in straight lines on the audio clock (`duckKnots`, pure).
  */
 
@@ -156,18 +157,19 @@ export function setBusVolumes(mix: Mix, volumes: BusVolumes, now: number): void 
 
 /**
  * What pulls a bus down: mission control's voice, the klaxon, the siren — the crew's own voice in
- * the lobby, over the menu's theme and hum (menuSound.ts) — and a piece the settings play for the
- * ear, over the music playing (musicPreview.ts).
+ * the lobby, over the menu's theme and hum (menuSound.ts) —, a piece the settings play for the
+ * ear, over the music playing (musicPreview.ts), and the break-room machine while it stands open
+ * (arcade/ArcadeDoor.tsx), over the music and the beds.
  */
-export type DuckSource = 'voice' | 'alarm' | 'siren' | 'crew' | 'preview';
+export type DuckSource = 'voice' | 'alarm' | 'siren' | 'crew' | 'preview' | 'arcade';
 
 /** How far each source pulls a bus down, dB; a source with none for the bus leaves it be. */
 export type Depths = Readonly<Partial<Record<DuckSource, number>>>;
 
 /** How far the sources pull the music and the beds down, dB. */
 export const DUCK_DB: Readonly<Record<'music' | 'ambience', Depths>> = {
-  music: { voice: -12, alarm: -6, siren: -6, crew: -8, preview: -24 },
-  ambience: { voice: -4, crew: -4 },
+  music: { voice: -12, alarm: -6, siren: -6, crew: -8, preview: -24, arcade: -30 },
+  ambience: { voice: -4, crew: -4, arcade: -18 },
 };
 /** A bus goes down over this long, s… */
 export const DUCK_ATTACK_S = 0.05;
@@ -247,6 +249,8 @@ export function levelOn(knots: readonly Knot[], t: number): number {
 
 /** What each mix is pulled by now, and the knots each of its ducks was last set on. */
 const pulls = new WeakMap<Mix, Map<DuckSource, Dip>>();
+/** Gains outside the buses that the pulls of a mix move too, each by depths of its own. */
+const followers = new WeakMap<Mix, Map<AudioParam, Depths>>();
 const laid = new WeakMap<AudioParam, Knot[]>();
 
 /** Lays the knots of `dips` on the duck `param` from `now`, from where its last ones had it. */
@@ -274,6 +278,27 @@ function pull(mix: Mix, source: DuckSource, dip: Dip, now: number): void {
   pulls.set(mix, dips);
   lay(mix.musicDuck.gain, dips, DUCK_DB.music, now);
   lay(mix.ambienceDuck.gain, dips, DUCK_DB.ambience, now);
+  for (const [param, depths] of followers.get(mix) ?? []) lay(param, dips, depths, now);
+}
+
+/**
+ * How far the run's voice, its klaxon and its siren pull the break-room machine down (arcade/),
+ * dB: the run's sounds stand over the machine, never the other way round.
+ */
+export const MACHINE_DB: Depths = { voice: -12, alarm: -8, siren: -8 };
+
+/**
+ * The gain `param` follows the pulls of `mix` from `now`, by `depths`, as the buses do — set at
+ * once to where the pulls in force put it. Returns what lets it go.
+ */
+export function followDucks(mix: Mix, param: AudioParam, depths: Depths, now: number): () => void {
+  const own = followers.get(mix) ?? new Map<AudioParam, Depths>();
+  followers.set(mix, own);
+  own.set(param, depths);
+  lay(param, pulls.get(mix) ?? new Map(), depths, now);
+  return () => {
+    own.delete(param);
+  };
 }
 
 /**

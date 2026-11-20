@@ -467,6 +467,21 @@
   }
 }
 
+/* ── a short window ─────────────────────────────────────────────────────── */
+
+/* 760 px high and less on a wide window: eleven items a fingertip high, close together, fit the
+   column of a window 720 px high as the ten did. */
+@media (max-height: 760px) and (min-width: 561px) {
+  .menu-list ul {
+    gap: 0;
+  }
+
+  .menu-list .menu-item {
+    min-height: 44px;
+    padding-block: 8px;
+  }
+}
+
 /* ── a phone held upright ───────────────────────────────────────────────── */
 
 /* One column: the title, the menu under it, a panel over the menu. */
@@ -543,14 +558,15 @@
   }
 
   /*
-   * Seven items a fingertip high fit a window 390 px high, and the menu has ten: the settings
+   * Seven items a fingertip high fit a window 390 px high, and the menu has eleven: the settings
    * go from the column, as the gear in the bar right over it opens them, the editor, a tool for
-   * a wider window, and the site's QR code, which a phone shows upright. The demo stays: a
-   * visitor comes by phone.
+   * a wider window, the site's QR code, which a phone shows upright, and the break-room machine,
+   * which opens upright here and from every lobby. The demo stays: a visitor comes by phone.
    */
   .menu-list li:has(> .menu-item[data-item='settings']),
   .menu-list li:has(> .menu-item[data-item='editor']),
-  .menu-list li:has(> .menu-item[data-item='qr']) {
+  .menu-list li:has(> .menu-item[data-item='qr']),
+  .menu-list li:has(> .menu-item[data-item='arcade']) {
     display: none;
   }
 

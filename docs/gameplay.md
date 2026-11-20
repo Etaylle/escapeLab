@@ -7,7 +7,8 @@ first win at the stations the whole crew presses, a crew of three, the Erfolge, 
 the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at its terminal,
 the Zugangskontrolle, the Anlaufsteuerung, the Paketfilter, an emergency and the open station,
 what the notepad takes down, what happens when a line drops, the demo room the server plays
-itself, and the QR codes that hand the game on to another device. Code:
+itself, the break-room machine for the wait (`client/src/arcade/`), and the QR codes that hand the
+game on to another device. Code:
 `packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
 `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
 `screens/shareCard.ts`, `world/{labelFade,finds,danger,ChatWheel}.ts(x)`,
@@ -1554,6 +1555,49 @@ new and is not sent), the positions (1.4 to 4.3 kB) and the word of what is on a
 small hosted instance's share of a slower core is a tenth of one: sixty watching are about what it
 has, and a hundred and fifty take 2.7 MB a second out of its line — the line, not the processor,
 is what an audience costs.
+
+## The break-room machine
+
+The plant has an arcade machine in its break room: „Ferret vs Ducks", Uros's own game, as he made
+it and modernised it (`client/src/arcade/`, its simulation ported from his reference and replayed
+against the original's frozen rules). Waiting is where a crew loses people; the machine is for the
+wait, and has no say in a room.
+
+**Where it opens.** „Arcade" in the main menu, after „Demo" (on a phone held sideways it goes from
+the column with the editor, the QR code and the settings, under the menu's seven-item rule); in a
+lobby, beside „Raum verlassen", for anybody — ready or not, the lobby goes on underneath: ready
+states, the chat, the host's start; and in a run only while the player waits: on the own line's
+card (the line down, the server's restart, the room being restored), on the maintenance card
+(„WARTUNG · Warten auf Ben"), and in the bar from the first moment somebody of the crew is away
+— the run goes on around the player then, and the machine stands over it as the pause menu does.
+While a run is live and nothing is waited for it cannot be opened (`arcade/door.ts` `waitOf`).
+While the run goes on around the player — somebody of the crew away, the own line down — the
+machine's frame says so in the plant's voice, the run's clock beside it as its HUD shows it: „Die
+Uhr des Einsatzes läuft weiter · 15:36" (`arcade/RunLine.tsx`); the run's radio and its alarms
+are heard over the machine, which goes down under them (docs/sound.md).
+
+**When it closes.** The moment what was waited for comes, the machine closes on its own, its game
+paused for the next time, and one line in the plant's voice says why, over the screen for 3.5 s:
+„Die Schicht beginnt." as the host starts the run from the lobby, „Die Leitung steht wieder." as
+the own line is back, „Die Anlage läuft wieder." as the maintenance lets the run go on, „Der
+Einsatz geht weiter." as the crew is whole again or goes on without whoever was away, „Der Einsatz
+ist vorbei." where the run ends meanwhile. From one wait of a run to another it stays open. The
+player closes it by „Zurück" or Esc with no game running; Esc pauses a game that runs.
+
+**Nothing of it reaches the room.** It sends nothing — no move, no line, no menu mark — and touches
+neither the clock, the alarms, the stats nor the Erfolge; while it stands open the screens under it
+are inert and hear none of the keys, as under the pause menu (the world's keys move the machine's
+ferret, never the avatar). Its bests stay in this browser (`escapelab-arcade-best-modern`,
+`-classic`, guarded), Modern and Classic apart.
+
+**What it is.** The machine's own menu (Schwierigkeit, Spieler, Steuerung, Regeln: Modern or
+Klassisch), its field, its HUD, its cards and its Info (Spielanleitung, Feldführer, Ton & Touch,
+Rekorde) as the reference has them, in German, in a frame of the plant's look; while a game runs
+the field is the page — the HUD beside it on a wide window, over it on an upright one, the touch
+buttons under it within reach. Klassisch plays exactly as the original (commit 49dc727 of Uros's
+game); Modern plays its first wave so too and adds, from wave 2, a multiplier for hits in a row,
+the visitor's pickups (Streuschuss, Schild, Zeitlupe), ducks that dive, helmet ducks, formations
+and the Great Drake every fifth wave. It comes as a chunk of its own the first time it opens.
 
 ## QR-Codes: onto another device
 

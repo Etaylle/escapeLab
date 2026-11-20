@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { ArcadeButton } from '../arcade/ArcadeDoor.js';
 import {
   dailyLabel,
   difficultyInfos,
@@ -616,6 +617,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
         <HostNews players={view.players} />
         <StartArea view={view} send={send} />
         <div className="lobby-foot">
+          <ArcadeButton className="link" />
           <button className="link" onClick={() => closeDoorsThen(leaveRoom)}>
             <Icon name="exit" /> Raum verlassen
           </button>

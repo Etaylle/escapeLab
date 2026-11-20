@@ -332,7 +332,10 @@ short sound a change at most, a voice each from the budget like every effect, no
 audience's screen; nothing of it lasts or loops, so the five lines' motion — a CSS animation each
 packet, no frame loop — costs the audio nothing per frame.
 
-**Ducking.** Mission control's voice pulls the music 12 dB and the beds 4 dB down while it is on
+**Ducking.** The break-room machine (arcade/, gameplay.md) pulls the music 30 dB and the beds
+18 dB down for as long as it stands open, and lets them back up as it closes: no stem stops or
+starts, the menu's theme and the lobby's piece go on where they were (the source `arcade`).
+Mission control's voice pulls the music 12 dB and the beds 4 dB down while it is on
 the air — from its opening squelch where it opens a run, else from its first word — and the
 klaxon, the alarm's sting and the siren pull the music 6 dB down while they sound, the crew's
 voices in the lobby 8 dB, and a piece the
@@ -365,6 +368,22 @@ drones are placed, the music follows the clock — and each of them schedules wh
 audio clock (`AudioContext.currentTime`), the own room's sporadic sounds 0.4 s ahead, the
 music's elements a second ahead. Your own footsteps and the doors still come from the frame
 loop, on the frame their step lands or their leaf starts to move.
+
+**The break-room machine** (`arcade/sound.ts`, `arcade/music.ts`) synthesises its own cues and
+its chiptune loop, as Uros's game did, through two gains of its own (its Info's „Musik" and
+„Effekte") behind its own sound switch, into one bus of the lab's: the effects' (`mix.sfx`). The
+lab's „Effekte", its „Gesamt" and the sound switch reach the machine there, and the brickwall
+covers it; the effects' send gives it a touch of the room it stands in. The run's sounds stand
+over it: one gain of the machine's follows the mix's pulls (`followDucks`, `MACHINE_DB`), so that
+mission control's voice pulls the machine 12 dB down, as it pulls the music, and the klaxon, the
+alarm's sting and the siren 8 dB, while the machine pulls neither the radio, the loudspeakers nor
+the effects. Levels (2026-11-20, against „How loud the music sits", the settings at their
+defaults): the machine's tune comes out at −42.2 dBFS RMS over its 128-step loop, its shot peaks
+at −28.9 dBFS. Open, it pulls the lab's stems from −52.0 to −82.0 and the loudest bed (the server
+room, −47.5) to −65.5: its tune stands 23 dB over any bed and 40 over the music. Under a radio
+line (RMS about −31.3) the tune sits at −54.2 and a shot's peak at −40.9: the line stands some
+23 dB over the tune, as the lab's own music, now 12 dB down, stands under it. Closing the machine stops
+every note it laid ahead and lets its graph go.
 
 ## What a page keeps (`samples.ts`, `audioStream.ts`, `audioMemory.ts`)
 

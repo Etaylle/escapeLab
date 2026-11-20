@@ -27,6 +27,9 @@ const ROOTS = ['client/src', 'core/src', 'server/src'];
 
 /** Files of interface voice, under packages/ (a folder ends on „/"), each with its reason. */
 const INTERFACE: Record<string, string> = {
+  'client/src/arcade/MachineCard.tsx': 'the break-room machine’s own cards: its players and scores',
+  'client/src/arcade/MachineInfo.tsx': 'the break-room machine’s own Info: how its game is played',
+  'client/src/arcade/MachineMenu.tsx': 'the break-room machine’s own menu: one or two players',
   'client/src/editor/': 'the mission editor: a tool, not the world',
   'client/src/screens/Crew.tsx': 'the crew as the lobby and the HUD list it, and the credits',
   'client/src/screens/CrewRoom.tsx': 'the lobby’s seats and colours',

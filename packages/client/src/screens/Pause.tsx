@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ArcadeButton, useWait } from '../arcade/ArcadeDoor.js';
 import type { AwayView, ClientMessage, PlayerView, TakeoverView } from '@escapelab/core';
 import { useServerNow } from '../hooks.js';
 import { Icon } from './Icon.js';
@@ -207,6 +208,7 @@ export function PauseCard({
         {awayWays(view, now).map((way) => (
           <Way key={`${way.kind}-${'name' in way ? way.name : ''}`} way={way} send={send} />
         ))}
+        <ArcadeButton />
       </div>
       {view.takeovers !== undefined && (
         <TakeoverAsks asks={view.takeovers} now={now} send={send} />
@@ -220,7 +222,9 @@ export function PauseCard({
  * Ben weiter" once the wait for their drop is over, „Einsatz abbrechen" for one alone on the
  * line; nothing before that — the crew strip counts their time away — and nothing while the run
  * stands still for the server's maintenance, whose card offers them (`PauseCard`). Kept out of
- * the bar while nobody is missed, so that its clock asks nothing then (`offerFor`).
+ * the bar while nobody is missed, so that its clock asks nothing then (`offerFor`). Meanwhile, from
+ * the first moment somebody is missed, the break-room machine is at hand („Arcade",
+ * arcade/ArcadeDoor.tsx): the player waits for them.
  */
 export function AwayOffer({
   view,
@@ -230,8 +234,9 @@ export function AwayOffer({
   send: (msg: ClientMessage) => void;
 }) {
   const now = useServerNow(250);
+  const machine = useWait() !== null;
   const ways = view.pausedAt === null ? awayWays(view, now).filter(offered) : [];
-  if (ways.length === 0) {
+  if (ways.length === 0 && (!machine || view.pausedAt !== null)) {
     return null;
   }
   return (
@@ -239,6 +244,7 @@ export function AwayOffer({
       {ways.map((way) => (
         <Way key={`${way.kind}-${'name' in way ? way.name : ''}`} way={way} send={send} />
       ))}
+      <ArcadeButton />
     </div>
   );
 }

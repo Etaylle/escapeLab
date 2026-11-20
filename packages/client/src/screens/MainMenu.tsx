@@ -8,6 +8,7 @@ export type MenuItemId =
   | 'join'
   | 'rounds'
   | 'demo'
+  | 'arcade'
   | 'qr'
   | 'handbook'
   | 'history'
@@ -21,6 +22,7 @@ export const MENU_LABELS: Readonly<Record<MenuItemId, string>> = {
   join: 'Beitreten',
   rounds: 'Offene Runden',
   demo: 'Demo',
+  arcade: 'Arcade',
   qr: 'QR-Code',
   handbook: 'Handbuch',
   history: 'Bestenliste',
@@ -39,8 +41,9 @@ export function opensPanel(item: MenuItemId): item is PanelId {
 
 /**
  * The menu's items in order, top to bottom: the ways into a round, then the demo the plant plays
- * by itself, to be watched, and the site's address as a QR code for another device; the account's
- * runs beside the Bestenliste, the editor where the page offers one.
+ * by itself, to be watched, the break-room machine (arcade/), and the site's address as a QR code
+ * for another device; the account's runs beside the Bestenliste, the editor where the page offers
+ * one.
  */
 export function menuItems(editor: boolean): MenuItemId[] {
   return [
@@ -48,6 +51,7 @@ export function menuItems(editor: boolean): MenuItemId[] {
     'join',
     'rounds',
     'demo',
+    'arcade',
     'qr',
     'handbook',
     'history',

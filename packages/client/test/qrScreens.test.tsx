@@ -65,9 +65,9 @@ describe('a QR code on the screen', () => {
 });
 
 describe('„QR-Code" in the main menu', () => {
-  it('stands after „Demo" and opens a panel of its own', () => {
+  it('stands after „Demo" and the machine, and opens a panel of its own', () => {
     const items = menuItems(false);
-    expect(items.indexOf('qr')).toBe(items.indexOf('demo') + 1);
+    expect(items.indexOf('qr')).toBe(items.indexOf('demo') + 2);
     expect(MENU_LABELS.qr).toBe('QR-Code');
     expect(opensPanel('qr')).toBe(true);
   });

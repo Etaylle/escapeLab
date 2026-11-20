@@ -11,6 +11,7 @@ import {
 } from '@escapelab/core';
 import { formatLeft } from '../clock.js';
 import { takeDemoLink } from '../demoLink.js';
+import { openArcade } from '../arcade/door.js';
 import { useNow } from '../hooks.js';
 import { crewPass, lastColor, lastName } from '../pass.js';
 import { dropSnapshot, resumeOf } from '../snapshots.js';
@@ -508,6 +509,8 @@ export function JoinScreen(props: Props) {
     ...demoWay(send, connected),
   };
   const [taken, setTaken] = useState<Taken | null>(null);
+  // The break-room machine opens over the menu at once: no page, no beat of the hero's.
+  const pick = pickOf(pages, take, setTaken);
   const card = seat !== null && (
     <BoundCard
       seat={seat}
@@ -537,7 +540,7 @@ export function JoinScreen(props: Props) {
           card={card}
           dimmed={bound !== null}
           rooms={rooms.length}
-          onPick={pickOf(pages, take, setTaken)}
+          onPick={(item) => (item === 'arcade' ? openArcade('menu') : pick(item))}
         />
         {bound !== null && <p className="bound-line">{boundLine(bound)}</p>}
         <div className="menu-quiet">
