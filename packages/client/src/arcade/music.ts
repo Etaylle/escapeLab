@@ -70,8 +70,12 @@ export class Music {
     if (bass !== null) {
       out.note(hz((ROOTS[bar] ?? 45) + bass), this.next, SIXTEENTH * 1.6, 'triangle', 0.09);
     }
-    if (lead === null) return;
-    if (this.step % 128 >= 64) out.note(hz(lead), this.next, SIXTEENTH * 1.8, 'square', 0.028);
-    else if (i % 4 === 0) out.note(hz(lead - 12), this.next, SIXTEENTH * 0.9, 'square', 0.018);
+    if (lead !== null) this.lead(out, lead, i);
+  }
+
+  /** The melody in the loop's second half, its quarter notes an octave down in the first. */
+  private lead(out: MusicOut, note: number, i: number): void {
+    if (this.step % 128 >= 64) out.note(hz(note), this.next, SIXTEENTH * 1.8, 'square', 0.028);
+    else if (i % 4 === 0) out.note(hz(note - 12), this.next, SIXTEENTH * 0.9, 'square', 0.018);
   }
 }

@@ -49,7 +49,7 @@ const LINES: Readonly<Record<'lobby' | 'line' | 'pause' | 'crew', string>> = {
   lobby: 'Die Schicht beginnt.',
   line: 'Die Leitung steht wieder.',
   pause: 'Die Anlage läuft wieder.',
-  crew: 'Alle Plätze sind wieder besetzt.',
+  crew: 'Der Einsatz geht weiter.',
 };
 /** What the plant says where a run is over while the machine stood open. */
 export const RUN_OVER_LINE = 'Der Einsatz ist vorbei.';
@@ -60,12 +60,20 @@ export const RUN_OVER_LINE = 'Der Einsatz ist vorbei.';
  * where the thing waited for came, null where it closes without a word (a room left, the menu
  * left for a room).
  */
-export function closingLine(from: Wait, to: Wait, phase: WaitFacts['phase']): string | null | undefined {
+export function closingLine(
+  from: Wait,
+  to: Wait,
+  phase: WaitFacts['phase'],
+): string | null | undefined {
   if (from === to || (RUN_WAITS.includes(from) && RUN_WAITS.includes(to))) return undefined;
   if (phase === 'won' || phase === 'lost') return from === 'menu' ? null : RUN_OVER_LINE;
-  if (from === 'lobby' && phase === 'playing') return LINES.lobby;
-  if (from !== null && from !== 'menu' && from !== 'lobby' && to === null) return LINES[from];
-  return null;
+  return lineAfter(from, to, phase);
+}
+
+/** The line for a wait of the lobby or a run that is over, where the run goes on. */
+function lineAfter(from: Wait, to: Wait, phase: WaitFacts['phase']): string | null {
+  if (from === 'lobby') return phase === 'playing' ? LINES.lobby : null;
+  return (from === 'line' || from === 'pause' || from === 'crew') && to === null ? LINES[from] : null;
 }
 
 /** The machine as the page holds it: open or not, and the line its closing left. */

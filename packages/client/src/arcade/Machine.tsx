@@ -32,34 +32,48 @@ function session(): Session {
 const onControl = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && ['INPUT', 'BUTTON', 'A'].includes(target.tagName);
 
-/** The keys over the Info menu: Esc and I close it. True where the key was taken. */
-function infoKey(s: Session, e: KeyboardEvent): boolean {
-  if (!s.info.open) return false;
-  if (e.code === 'Escape' || e.code === 'KeyI') {
-    e.preventDefault();
-    s.closeInfo();
-  }
-  return true;
+/** The keys over the Info: Esc and I close it; the rest are its controls'. */
+function infoAct(s: Session, e: KeyboardEvent): (() => void) | null {
+  return e.code === 'Escape' || e.code === 'KeyI' ? () => s.closeInfo() : null;
+}
+
+/** A key the machine takes: none of the lab's listeners hears it, nor does the page act on it. */
+function keep(e: KeyboardEvent): void {
+  e.preventDefault();
+  e.stopImmediatePropagation();
 }
 
 /**
- * The machine's keys, heard before the lab's (capture): I the Info, Enter the card's first way,
- * P and Esc pause a running game, Esc with none running leaves, and the moves and fire while
- * one runs. Every key the machine takes is the machine's alone (`preventDefault`).
+ * The machine's keys, heard before the lab's (on the window, capturing): I the Info, Enter the
+ * card's first way, P and Esc pause a running game, Esc with none running leaves, and the moves
+ * and fire while one runs. Every key the machine takes is the machine's alone (`keep`): the Esc
+ * that closes it opens no pause menu under it.
  */
 function onKeyDown(s: Session, e: KeyboardEvent, leave: () => void): void {
-  if (infoKey(s, e)) return;
-  const g = s.game;
-  const running = g !== null && g.state !== 'paused' && g.state !== 'game-over' && g.state !== 'turn-change';
-  const take = (act: () => void): void => {
-    e.preventDefault();
-    act();
-  };
-  if (e.code === 'KeyI' && !e.repeat) take(() => s.openInfo());
-  else if (e.code === 'Escape' && !running) take(leave);
-  else if (e.code === 'Enter' && !onControl(e.target)) take(() => s.primary());
-  else if ((e.code === 'KeyP' || e.code === 'Escape') && g && !e.repeat) take(() => s.togglePause());
-  else if (g?.state === 'playing' && MOVE_KEYS.includes(e.code)) take(() => s.input.key(e.code, true));
+  const act = s.info.open ? infoAct(s, e) : keyAct(s, e, leave);
+  if (act === null) return;
+  keep(e);
+  act();
+}
+
+/** Whether a game stands in play: not paused, not over, not waiting for the next player. */
+const running = (s: Session): boolean =>
+  s.game !== null && ['playing', 'death', 'wave-clear'].includes(s.game.state);
+
+/** What the machine's keys do, by key; none for a key repeated where it acts once. */
+const KEYS: Readonly<Record<string, (s: Session, e: KeyboardEvent, leave: () => void) => (() => void) | null>> = {
+  KeyI: (s, e) => (e.repeat ? null : () => s.openInfo()),
+  Escape: (s, e, leave) => (!running(s) ? leave : e.repeat ? null : () => s.togglePause()),
+  Enter: (s, e) => (onControl(e.target) ? null : () => s.primary()),
+  KeyP: (s, e) => (s.game === null || e.repeat ? null : () => s.togglePause()),
+};
+
+/** What `e` does at the machine: its key's act, or a move while a game is in play. */
+function keyAct(s: Session, e: KeyboardEvent, leave: () => void): (() => void) | null {
+  const special = KEYS[e.code];
+  if (special) return special(s, e, leave);
+  const moves = s.game?.state === 'playing' && MOVE_KEYS.includes(e.code);
+  return moves ? () => s.input.key(e.code, true) : null;
 }
 
 /** The canvas at one canvas pixel per device pixel, drawing in the field's 800 × 680 units. */
@@ -99,7 +113,10 @@ function useFrames(s: Session, canvas: React.RefObject<HTMLCanvasElement | null>
 function useMachineKeys(s: Session, leave: () => void): void {
   useEffect(() => {
     const down = (e: KeyboardEvent): void => onKeyDown(s, e, leave);
-    const up = (e: KeyboardEvent): void => s.input.key(e.code, false);
+    const up = (e: KeyboardEvent): void => {
+      if (s.input.keys.has(e.code)) keep(e);
+      s.input.key(e.code, false);
+    };
     const away = (): void => {
       if (document.hidden || !document.hasFocus()) s.leave();
     };
@@ -144,6 +161,35 @@ function fieldX(canvas: HTMLCanvasElement, e: React.PointerEvent): number {
   return ((e.clientX - box.left) / box.width) * WIDTH;
 }
 
+/** The field: the canvas a finger steers on, and over it the chips, the banner and the cards. */
+function Field({ s, canvas, onLeave }: { s: Session; canvas: React.RefObject<HTMLCanvasElement | null>; onLeave: () => void }) {
+  const g = s.game;
+  const steer = (e: React.PointerEvent<HTMLCanvasElement>): void => {
+    const held = s.input.drag?.id === e.pointerId;
+    if (e.type === 'pointerdown' && e.pointerType !== 'mouse' && g?.state === 'playing') {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } else if (!held) return;
+    s.input.steer(e.pointerId, fieldX(e.currentTarget, e));
+  };
+  const release = (e: React.PointerEvent): void => s.input.release(e.pointerId);
+  const banner = g?.state === 'playing' ? s.banner : null;
+  return (
+    <div className="arcade-field">
+      <canvas
+        ref={canvas}
+        aria-label={`${TITLE}: ein Frettchen verteidigt seinen Bau gegen einen Schwarm Enten`}
+        onPointerDown={steer}
+        onPointerMove={steer}
+        onPointerUp={release}
+        onPointerCancel={release}
+      />
+      {g !== null && <Chips g={g} />}
+      {banner !== null && <BannerView banner={banner} />}
+      {g !== null && <Card s={s} g={g} onLeave={onLeave} />}
+    </div>
+  );
+}
+
 export default function Machine({ onLeave }: { onLeave: () => void }) {
   const s = session();
   useSyncExternalStore(s.subscribe, s.getVersion);
@@ -157,38 +203,20 @@ export default function Machine({ onLeave }: { onLeave: () => void }) {
   useBanner(s, s.banner?.seq);
   useFocusBack();
   useEffect(() => () => s.leave(), [s]);
-  const g = s.game;
-  const touch = g !== null && s.choice.controls === 'touch';
-  const steer = (e: React.PointerEvent<HTMLCanvasElement>): void => {
-    if (e.pointerType === 'mouse' || g?.state !== 'playing') return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    s.input.steer(e.pointerId, fieldX(e.currentTarget, e));
-  };
+  const playing = s.game !== null;
+  const touch = playing && s.choice.controls === 'touch';
+  const looks = ['arcade', playing && 'arcade--playing', touch && 'arcade--touch'];
   return (
     <div
-      className={`arcade${g ? ' arcade--playing' : ''}${touch ? ' arcade--touch' : ''}`}
+      className={looks.filter(Boolean).join(' ')}
       role="dialog"
       aria-modal="true"
       aria-label={`Spielautomat: ${TITLE}`}
     >
       <Hud s={s} onLeave={leave} />
       <div className="arcade-stage">
-        <div className="arcade-field">
-          <canvas
-            ref={canvas}
-            aria-label={`${TITLE}: ein Frettchen verteidigt seinen Bau gegen einen Schwarm Enten`}
-            onPointerDown={steer}
-            onPointerMove={(e) => {
-              if (s.input.drag?.id === e.pointerId) s.input.steer(e.pointerId, fieldX(e.currentTarget, e));
-            }}
-            onPointerUp={(e) => s.input.release(e.pointerId)}
-            onPointerCancel={(e) => s.input.release(e.pointerId)}
-          />
-          {g !== null && <Chips g={g} />}
-          {g !== null && s.banner !== null && g.state === 'playing' && <BannerView banner={s.banner} />}
-          {g !== null && <Card s={s} g={g} onLeave={leave} />}
-        </div>
-        {g === null && <MachineMenu s={s} onLeave={leave} />}
+        <Field s={s} canvas={canvas} onLeave={leave} />
+        {!playing && <MachineMenu s={s} onLeave={leave} />}
       </div>
       {touch && <TouchPad s={s} />}
       {s.info.open && <InfoPanel s={s} />}

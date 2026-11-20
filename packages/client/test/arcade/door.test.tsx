@@ -68,7 +68,7 @@ describe('the machine closing by itself', () => {
     expect(lines('lobby', 'crew', 'playing')).toBe('Die Schicht beginnt.');
     expect(lines('line', null, 'playing')).toBe('Die Leitung steht wieder.');
     expect(lines('pause', null, 'playing')).toBe('Die Anlage läuft wieder.');
-    expect(lines('crew', null, 'playing')).toBe('Alle Plätze sind wieder besetzt.');
+    expect(lines('crew', null, 'playing')).toBe('Der Einsatz geht weiter.');
     expect(lines('crew', null, 'lost')).toBe(RUN_OVER_LINE);
   });
 

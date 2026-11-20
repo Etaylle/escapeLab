@@ -13,35 +13,57 @@ import type { PickupKind } from './rules.js';
 
 /** The frame's head and the HUD around the field. */
 export function Hud({ s, onLeave }: { s: Session; onLeave: () => void }) {
-  const g = s.game;
-  const p = g ? current(g) : null;
-  const difficulty = g?.difficulty ?? s.choice.difficulty;
   return (
     <header className="arcade-hud">
       <div className="arcade-name">
         <span className="arcade-kicker">PAUSENRAUM · SPIELAUTOMAT</span>
         <h1>{TITLE}</h1>
       </div>
-      <dl className="arcade-stats">
-        <div>
-          <dt>PUNKTE · S{g ? g.active + 1 : 1}</dt>
-          <dd className="arcade-score">{pad(p?.score ?? 0, 5)}</dd>
-        </div>
-        <div>
-          <dt>
-            REKORD <small>{DIFFICULTY_LABELS[difficulty].toUpperCase()}</small>
-          </dt>
-          <dd>{pad(s.scores().values[difficulty], 5)}</dd>
-        </div>
-        <div>
-          <dt>WELLE</dt>
-          <dd>{pad(p?.wave ?? 1, 2)}</dd>
-        </div>
-        <div>
-          <dt>LEBEN</dt>
-          <dd>{pad(p?.lives ?? 3, 2)}</dd>
-        </div>
-      </dl>
+      <Stats s={s} />
+      <HudButtons s={s} onLeave={onLeave} />
+    </header>
+  );
+}
+
+/** What the HUD counts: the player at the field, the score, the wave, the lives, the difficulty. */
+function countsOf(s: Session) {
+  const g = s.game;
+  if (g === null) return { seat: 1, score: 0, wave: 1, lives: 3, difficulty: s.choice.difficulty };
+  const p = current(g);
+  return { seat: g.active + 1, score: p.score, wave: p.wave, lives: p.lives, difficulty: g.difficulty };
+}
+
+/** The score, the best on the difficulty, the wave and the lives. */
+function Stats({ s }: { s: Session }) {
+  const { seat, score, wave, lives, difficulty } = countsOf(s);
+  return (
+    <dl className="arcade-stats">
+      <div>
+        <dt>PUNKTE · S{seat}</dt>
+        <dd className="arcade-score">{pad(score, 5)}</dd>
+      </div>
+      <div>
+        <dt>
+          REKORD <small>{DIFFICULTY_LABELS[difficulty].toUpperCase()}</small>
+        </dt>
+        <dd>{pad(s.scores().values[difficulty], 5)}</dd>
+      </div>
+      <div>
+        <dt>WELLE</dt>
+        <dd>{pad(wave, 2)}</dd>
+      </div>
+      <div>
+        <dt>LEBEN</dt>
+        <dd>{pad(lives, 2)}</dd>
+      </div>
+    </dl>
+  );
+}
+
+/** The machine's Pause, Info, sound switch and the way back to the lab. */
+function HudButtons({ s, onLeave }: { s: Session; onLeave: () => void }) {
+  const g = s.game;
+  return (
       <div className="arcade-buttons">
         <button disabled={!g} onClick={() => s.togglePause()}>
           {g?.state === 'paused' ? '▶ Weiter' : 'Ⅱ Pause'}
@@ -63,7 +85,6 @@ export function Hud({ s, onLeave }: { s: Session; onLeave: () => void }) {
           ← Zurück
         </button>
       </div>
-    </header>
   );
 }
 

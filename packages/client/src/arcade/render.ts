@@ -124,13 +124,17 @@ function duckLook(d: Duck, t: number, view: View, squash: number): Partial<DuckL
     flap: d.dive ? 22 : 8,
   };
 }
+/** Where a duck is drawn: its slot, a diver's offset placed between the last two steps. */
+function duckAt(d: Duck, view: View): [number, number] {
+  if (!d.dive) return [duckX(d), duckY(d)];
+  return [d.x + lerp(view, d, 0, d.ox ?? 0), d.y + lerp(view, d, 1, d.oy ?? 0)];
+}
 function ducks(ctx: Ctx, g: Game, p: Player, view: View): void {
   const t = g.time;
   const squash = view.modern && t - view.marchAt < 0.09 ? 1 : 0;
   for (const d of p.ducks) {
     if (!d.alive) continue;
-    const x = d.dive ? d.x + lerp(view, d, 0, d.ox ?? 0) : duckX(d);
-    const y = d.dive ? d.y + lerp(view, d, 1, d.oy ?? 0) : duckY(d);
+    const [x, y] = duckAt(d, view);
     drawDuck(ctx, x, y, d.row, t, 2, duckLook(d, t, view, squash));
   }
 }

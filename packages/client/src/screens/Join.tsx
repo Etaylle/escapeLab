@@ -382,11 +382,10 @@ function useChoosing(panel: PanelId | null): void {
 /**
  * The menu left for a page of its own (`open`) by item `item`, after the hero's beat: the lab's
  * doors before the editor, the short shutter before every other page (DoorWipe.tsx). The demo
- * is asked for at once: the doors close over the menu as its room comes, as for any room; the
- * break-room machine opens at once over the menu.
+ * is asked for at once: the doors close over the menu as its room comes, as for any room.
  */
 export function leaveFor(item: MenuItemId, open: () => void): void {
-  if (item === 'demo' || item === 'arcade') {
+  if (item === 'demo') {
     open();
   } else if (item === 'editor') {
     doorsThen(open, true);
@@ -508,9 +507,10 @@ export function JoinScreen(props: Props) {
   const pages = {
     ...pagesOf(props, pickedMission(missions, props.picked)),
     ...demoWay(send, connected),
-    arcade: () => openArcade('menu'),
   };
   const [taken, setTaken] = useState<Taken | null>(null);
+  // The break-room machine opens over the menu at once: no page, no beat of the hero's.
+  const pick = pickOf(pages, take, setTaken);
   const card = seat !== null && (
     <BoundCard
       seat={seat}
@@ -540,7 +540,7 @@ export function JoinScreen(props: Props) {
           card={card}
           dimmed={bound !== null}
           rooms={rooms.length}
-          onPick={pickOf(pages, take, setTaken)}
+          onPick={(item) => (item === 'arcade' ? openArcade('menu') : pick(item))}
         />
         {bound !== null && <p className="bound-line">{boundLine(bound)}</p>}
         <div className="menu-quiet">

@@ -14,7 +14,17 @@ import { render, type View } from './render.js';
 import { Scores, Settings, SCORE_KEYS, pageStorage, type Rules, type Store } from './scores.js';
 import { ArcadeAudio, type Outlet } from './sound.js';
 import { waveNews } from './texts.js';
-import { createGame, current, emit, pause, resume, type Difficulty, type Game, type GameEvent } from './rules.js';
+import {
+  createGame,
+  current,
+  emit,
+  pause,
+  resume,
+  type Actions,
+  type Difficulty,
+  type Game,
+  type GameEvent,
+} from './rules.js';
 
 export type Controls = 'keyboard' | 'touch';
 
@@ -34,6 +44,13 @@ export interface Banner {
 
 /** The effects the screen draws as the game's original did, by cue. */
 const BURSTS: Readonly<Record<string, number>> = { explosion: 0.55, impact: 0.55, death: 1.2, bonus: 1.2 };
+/** What drawing remembers of an event of the modern rules: the flock's step, who fired, a hit. */
+const MARKS: Readonly<Record<string, (s: Session, g: Game, value: number) => void>> = {
+  march: (s, g) => (s.view.marchAt = g.time),
+  'duck-fire': (s, g, id) => s.view.firedAt.set(id, g.time),
+  'boss-hit': (s) => (s.view.bossHurt = 0.15),
+  'wave-start': (s, _g, wave) => (s.banner = s.bannerOf(wave)),
+};
 /** How long a banner stands, ms. */
 export const BANNER_MS = 2600;
 
@@ -206,10 +223,7 @@ export class Session {
     if (life !== undefined) g.effects.push({ ...e, life });
     if (g.classic) return;
     this.clock.freeze(this.fx.spawn(e));
-    if (e.type === 'march') this.view.marchAt = g.time;
-    if (e.type === 'duck-fire' && typeof e.value === 'number') this.view.firedAt.set(e.value, g.time);
-    if (e.type === 'boss-hit') this.view.bossHurt = 0.15;
-    if (e.type === 'wave-start' && typeof e.value === 'number') this.banner = this.bannerOf(e.value);
+    MARKS[e.type]?.(this, g, typeof e.value === 'number' ? e.value : 0);
   }
 
   private syncMusic(g: Game | null): void {
@@ -231,26 +245,29 @@ export class Session {
     const dt = Math.min(0.1, Math.max(0, now - this.lastFrame) / 1000);
     this.lastFrame = now;
     const g = this.game;
-    let actions = this.input.actions;
-    if (g) {
-      actions = this.input.actionsFor(current(g).x, autofire);
-      if (actions.left !== actions.right) this.view.facing = actions.left ? -1 : 1;
-      this.clock.tick(now, g, actions);
-      for (const e of g.events) this.react(g, e);
-      g.events = [];
-      for (const p of g.players) this.scores().record(g.difficulty, p.score);
-      if (g.state !== 'paused') this.fx.update(dt);
-      this.view.bossHurt = Math.max(0, this.view.bossHurt - dt);
-      this.view.alpha = this.clock.alpha;
-      this.view.previous = this.clock.previous;
-      const key = this.shownKey(g);
-      if (key !== this.shown) {
-        this.shown = key;
-        this.changed();
-      }
-    }
+    const actions = g ? this.play(g, now, dt, autofire) : this.input.actions;
     this.syncMusic(g);
     if (ctx) render(ctx, g, now / 1000, actions, this.view);
+  }
+
+  /** The game advanced to `now` with what is held, its events taken, the screen told. */
+  private play(g: Game, now: number, dt: number, autofire: boolean): Actions {
+    const actions = this.input.actionsFor(current(g).x, autofire);
+    if (actions.left !== actions.right) this.view.facing = actions.left ? -1 : 1;
+    this.clock.tick(now, g, actions);
+    for (const e of g.events) this.react(g, e);
+    g.events = [];
+    for (const p of g.players) this.scores().record(g.difficulty, p.score);
+    if (g.state !== 'paused') this.fx.update(dt);
+    this.view.bossHurt = Math.max(0, this.view.bossHurt - dt);
+    this.view.alpha = this.clock.alpha;
+    this.view.previous = this.clock.previous;
+    const key = this.shownKey(g);
+    if (key !== this.shown) {
+      this.shown = key;
+      this.changed();
+    }
+    return actions;
   }
 }
 

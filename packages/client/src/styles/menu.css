@@ -467,6 +467,21 @@
   }
 }
 
+/* ── a short window ─────────────────────────────────────────────────────── */
+
+/* 760 px high and less on a wide window: eleven items a fingertip high, close together, fit the
+   column of a window 720 px high as the ten did. */
+@media (max-height: 760px) and (min-width: 561px) {
+  .menu-list ul {
+    gap: 0;
+  }
+
+  .menu-list .menu-item {
+    min-height: 44px;
+    padding-block: 8px;
+  }
+}
+
 /* ── a phone held upright ───────────────────────────────────────────────── */
 
 /* One column: the title, the menu under it, a panel over the menu. */

@@ -91,7 +91,7 @@ describe('the menu left for a page of its own', () => {
     const pages = pagesOf({ ...openers, openHistory: noop }, 'blackout');
     const ways: Record<string, { kind: WipeKind; ms: number }> = {};
     // „Demo" leads into a room, behind the room's own doors (test/demo.test.tsx); „Arcade" opens
-    // the break-room machine over the menu at once (test/arcade/door.test.tsx).
+    // the break-room machine over the menu at once, no page (screens/Join.tsx).
     const leaving = menuItems(true).filter(
       (it) => !opensPanel(it) && it !== 'demo' && it !== 'arcade',
     );

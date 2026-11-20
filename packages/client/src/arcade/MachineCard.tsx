@@ -55,6 +55,20 @@ export function faceOf(s: Pick<Session, 'initialBest' | 'scores'>, g: Game): Fac
   }
 }
 
+/** The card's ways besides its first: start anew while paused, the Info, the menu, the lab. */
+function CardWays({ s, paused, onLeave }: { s: Session; paused: boolean; onLeave: () => void }) {
+  return (
+    <>
+      {paused && <button onClick={() => s.start()}>Neu starten</button>}
+      <button onClick={() => s.openInfo()}>ⓘ Info</button>
+      <button onClick={() => s.toMenu()}>Zum Automatenmenü</button>
+      <button className="arcade-quiet" onClick={onLeave}>
+        Zurück ins Labor
+      </button>
+    </>
+  );
+}
+
 export function Card({ s, g, onLeave }: { s: Session; g: Game; onLeave: () => void }) {
   const face = faceOf(s, g);
   const first = useRef<HTMLButtonElement>(null);
@@ -77,14 +91,7 @@ export function Card({ s, g, onLeave }: { s: Session; g: Game; onLeave: () => vo
             {face.primary} <span aria-hidden="true">→</span>
           </button>
         )}
-        {state === 'paused' && <button onClick={() => s.start()}>Neu starten</button>}
-        {state !== 'wave-clear' && <button onClick={() => s.openInfo()}>ⓘ Info</button>}
-        {state !== 'wave-clear' && <button onClick={() => s.toMenu()}>Zum Automatenmenü</button>}
-        {state !== 'wave-clear' && (
-          <button className="arcade-quiet" onClick={onLeave}>
-            Zurück ins Labor
-          </button>
-        )}
+        {state !== 'wave-clear' && <CardWays s={s} paused={state === 'paused'} onLeave={onLeave} />}
       </div>
     </div>
   );
