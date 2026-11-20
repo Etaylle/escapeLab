@@ -42,7 +42,7 @@ function HowToPlay() {
       <Keys keys={['P']} what="Pause" />
       <Keys keys={['ENTER']} what="Start · Bereit · Nochmal" />
       <Keys keys={['I']} what="diese Info" />
-      <Keys keys={['ESC']} what="Pause; ohne laufendes Spiel zurück ins Labor" />
+      <Keys keys={['ESC']} what="Pause; ohne laufendes Spiel zurück zur Spielauswahl" />
       <p>Touch: auf dem Feld ziehen zum Laufen, oder ◀ ▶; FEUER oder Dauerfeuer schießt.</p>
       <p>Zwei Spieler wechseln sich nach jedem verlorenen Leben ab.</p>
     </>

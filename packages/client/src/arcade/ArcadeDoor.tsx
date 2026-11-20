@@ -20,7 +20,7 @@ import {
  * stands open (world/mix.ts, the source `arcade`) and let back up as it goes — no stem restarted.
  */
 
-const Machine = lazy(() => import('./Machine.js'));
+const Machine = lazy(() => import('./Cabinet.js'));
 
 /** How long the plant's closing line stands, ms: the length of its toast's fade (reconnect.css). */
 export const LINE_MS = 3500;

@@ -1,0 +1,265 @@
+/* ══ the break-room machine: its frame and its select ════════════════════════
+ * arcade/Cabinet.tsx, in the chunk the machine comes in; what both games share on it: the frame
+ * over the lab in the plant's look — the menu's near-black, its hairline, Michroma for names and
+ * nowhere else —, its buttons, the run's clock, the Info's shell. Each game's own screen keeps its
+ * own sheet (machine.css, flush/flush.css). Nothing blurs what lies behind it; under reduced motion
+ * nothing slides.
+ */
+
+.arcade {
+  --arcade-ground: #080d11;
+  --arcade-mint: #bcecc7;
+  --arcade-orange: #ffad65;
+  --arcade-text: #f1f3d9;
+  --arcade-muted: #a0afa0;
+  position: fixed;
+  inset: 0;
+  z-index: 63;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  background: #090e13;
+  color: var(--arcade-text);
+  font-family: var(--mono);
+  font-size: calc(14px * var(--text-scale, 1));
+}
+
+.arcade button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--arcade-mint);
+  font-family: var(--mono);
+  font-size: calc(14px * var(--text-scale, 1));
+  cursor: pointer;
+}
+
+.arcade button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.arcade button:focus-visible {
+  outline: 2px solid var(--arcade-orange);
+  outline-offset: 3px;
+}
+
+.arcade-kicker {
+  color: var(--arcade-orange);
+  letter-spacing: 0.14em;
+  font-size: calc(14px * var(--text-scale, 1));
+}
+
+/* The run going on around the player: its clock, said in the plant's voice, over everything. */
+.arcade-run {
+  flex: 1 0 100%;
+  order: -1;
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--warn);
+  background: #1a1408;
+  color: #fde68a;
+  font-variant-numeric: tabular-nums;
+}
+
+.arcade-copy,
+.arcade-hint {
+  margin: 0;
+  color: var(--arcade-muted);
+  line-height: 1.5;
+}
+
+.arcade .arcade-primary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  background: var(--arcade-mint);
+  border-color: var(--arcade-mint);
+  color: #122c20;
+  font-weight: 700;
+}
+
+/* The Info over the machine. */
+.arcade-info {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: #07110ce6;
+}
+
+.arcade-info-card {
+  width: min(100%, 640px);
+  max-height: calc(100svh - 24px);
+  overflow-y: auto;
+  padding: 18px 20px 22px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: rgba(9, 14, 19, 0.97);
+}
+
+.arcade-info-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.arcade-info-head h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: calc(18px * var(--text-scale, 1));
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.arcade-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 14px 0 16px;
+  padding: 4px;
+  border: 1px solid #314336;
+  border-radius: 5px;
+  background: #0e1913;
+}
+
+.arcade-tabs button {
+  flex: 1 1 auto;
+  border-color: transparent;
+  color: #b5c4b8;
+}
+
+.arcade-panel h3 {
+  margin: 8px 0;
+  font-size: calc(22px * var(--text-scale, 1));
+  color: var(--arcade-text);
+}
+
+.arcade-panel h3 em {
+  color: var(--arcade-mint);
+  font-style: normal;
+}
+
+.arcade-panel p {
+  color: var(--arcade-muted);
+  line-height: 1.6;
+}
+
+.arcade-slider,
+.arcade-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.arcade-slider span {
+  width: 72px;
+}
+
+.arcade-slider input {
+  flex: 1;
+  min-height: 44px;
+  accent-color: var(--arcade-mint);
+}
+
+.arcade-check input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--arcade-mint);
+}
+
+
+.arcade-tabs button[aria-selected='true'] {
+  background: #c1e5b7;
+  border-color: #c1e5b7;
+  color: #192d1c;
+  font-weight: 700;
+}
+
+/* The select: both games as two large cards, the one played last lit. */
+.arcade-select {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow-y: auto;
+}
+
+.arcade-select-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.arcade-select-head h1 {
+  flex: 1;
+  margin: 0;
+  font-family: var(--display);
+  font-size: calc(20px * var(--text-scale, 1));
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.arcade-cards {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  align-content: center;
+  gap: 20px;
+  padding: 16px;
+}
+
+.arcade .arcade-game-card {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  width: min(100%, 360px);
+  padding: 14px;
+  border: 2px solid var(--line-2);
+  border-radius: 8px;
+  background: #0d141b;
+  color: var(--arcade-text);
+  text-align: left;
+}
+
+.arcade .arcade-game-card[aria-current='true'] {
+  border-color: var(--beam, #ffd6a8);
+  background: #151d24;
+}
+
+.arcade-game-card b {
+  font-family: var(--display);
+  font-size: calc(18px * var(--text-scale, 1));
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--arcade-mint);
+}
+
+.arcade-game-card small {
+  color: var(--arcade-muted);
+}
+
+.arcade-card-picture {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 4px;
+  background: #080d11;
+}
+
+.arcade-select > .arcade-hint {
+  padding: 0 16px 16px;
+  text-align: center;
+}
