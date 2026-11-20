@@ -167,13 +167,25 @@ describe('the machine as the page carries it', () => {
   it('comes in a chunk of its own: the page’s first load holds its door alone', () => {
     const entry = [...graphOf('main')].filter((m) => m.startsWith('arcade/'));
     expect(entry.sort()).toEqual(['arcade/ArcadeDoor', 'arcade/door']);
-    expect(sourceOf('arcade/ArcadeDoor')).toContain("lazy(() => import('./Machine.js'))");
+    expect(sourceOf('arcade/ArcadeDoor')).toContain("lazy(() => import('./Cabinet.js'))");
+  });
+
+  it('opens on a small select: each game, and its picture, comes in a chunk of its own', () => {
+    const inMachine = (m: string): boolean => m.startsWith('arcade/');
+    const select = [...graphOf('arcade/Cabinet', inMachine)].filter(inMachine).sort();
+    expect(select).toEqual(['arcade/Cabinet', 'arcade/RunLine', 'arcade/scores', 'arcade/select']);
+    const cabinet = sourceOf('arcade/Cabinet');
+    for (const chunk of ['./Machine.js', './flush/FlushMachine.js', './preview.js', './flush/preview.js']) {
+      expect(cabinet).toContain(`import('${chunk}')`);
+    }
   });
 
   it('sends nothing: it reaches the lab for its sound and the run’s clock, never the line', () => {
     const inMachine = (m: string): boolean => m.startsWith('arcade/');
-    const machine = [...graphOf('arcade/Machine', inMachine), ...graphOf('arcade/ArcadeDoor', inMachine)];
+    const machine = ['arcade/ArcadeDoor', 'arcade/Cabinet', 'arcade/Machine', 'arcade/flush/FlushMachine']
+      .flatMap((root) => [...graphOf(root, inMachine)]);
     expect(machine).toContain('arcade/session');
+    expect(machine).toContain('arcade/flush/play');
     // The clock and the server's time, read for the run's clock on the frame; the mix for the sound.
     expect([...new Set(machine.filter((m) => !inMachine(m)))].sort()).toEqual([
       'clock',

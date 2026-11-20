@@ -179,8 +179,10 @@ export const GROUPS = [
     captures: [
       'menu.png',
       'menu-qr.png',
+      'arcade-select.png',
       'menu-arcade.png',
       'arcade-play.png',
+      'arcade-flush.png',
       'menu-hero.png',
       'menu-hero-hover.png',
       'menu-place-handbook.png',
@@ -208,6 +210,7 @@ export const GROUPS = [
       'history-phone.png',
       'arcade-phone.png',
       'lobby-arcade.png',
+      'arcade-flush-phone.png',
       'lobby-filled.png',
       'menu-open-rounds.png',
       'lobby-chrome.png',

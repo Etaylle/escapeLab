@@ -43,7 +43,7 @@ export function faceOf(s: Pick<Session, 'initialBest' | 'scores'>, g: Game): Fac
   const p = current(g);
   switch (g.state) {
     case 'paused':
-      return { title: 'Kurze Pfotenpause.', copy: 'Der Bau kann warten.\nP drückt weiter, Esc führt zurück ins Labor.', primary: 'Weiter' };
+      return { title: 'Kurze Pfotenpause.', copy: 'Der Bau kann warten.\nP drückt weiter, Esc führt zurück zur Spielauswahl.', primary: 'Weiter' };
     case 'wave-clear':
       return { title: 'Schwarm besiegt!', copy: `Welle ${p.wave} geschafft.\nFrische Deckungen. Mehr Federn im Anflug.`, primary: null };
     case 'turn-change':
@@ -63,7 +63,7 @@ function CardWays({ s, paused, onLeave }: { s: Session; paused: boolean; onLeave
       <button onClick={() => s.openInfo()}>ⓘ Info</button>
       <button onClick={() => s.toMenu()}>Zum Automatenmenü</button>
       <button className="arcade-quiet" onClick={onLeave}>
-        Zurück ins Labor
+        Zur Spielauswahl
       </button>
     </>
   );

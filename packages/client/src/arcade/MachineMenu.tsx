@@ -73,7 +73,7 @@ export function MachineMenu({ s, onLeave }: { s: Session; onLeave: () => void })
       <p className="arcade-hint">oder ENTER drücken</p>
       <div className="arcade-menu-foot">
         <button onClick={() => s.openInfo()}>ⓘ Info</button>
-        <button onClick={onLeave}>← Zurück ins Labor</button>
+        <button onClick={onLeave}>← Zur Spielauswahl</button>
       </div>
     </section>
   );
