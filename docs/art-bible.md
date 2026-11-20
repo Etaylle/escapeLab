@@ -642,6 +642,7 @@ middle at .5):
 | Beitreten | the Flur at the Serverschott, the lab's gate | 19.5, 10 |
 | Offene Runden | the Ost-Flur's console hall, the lab's Leitstand | 28.5, 7 |
 | Demo | the Flur's west end, where a night's first walk begins | 6.5, 10.5 |
+| Arcade | the Flur's east end, where a crew on its break would stand at a machine | 24.5, 10.5 |
 | QR-Code | the hatch in the Archiv's corner, the lab's way in and out | 1.5, 1.5 |
 | Handbuch | the Archiv's shelves and its book | 5.5, 3.5 |
 | Bestenliste | the Süd-Flur's notice board | 22.5, 17 |

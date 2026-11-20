@@ -90,8 +90,8 @@ keine Grenze.
 
 **Startseite:** Ein Hauptmenü wie in einem Spiel, über dem beleuchteten Labor der gewählten Mission,
 das langsam vorbeizieht: *Einsatz starten* (die Missionskarten, „Runde eröffnen"), *Beitreten*,
-*Offene Runden*, *Demo*, *QR-Code*, *Handbuch*, *Bestenliste*, *Meine Einsätze*, *Editor* und
-*Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem Controller (Steuerkreuz,
+*Offene Runden*, *Demo*, *Arcade*, *QR-Code*, *Handbuch*, *Bestenliste*, *Meine Einsätze*, *Editor*
+und *Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem Controller (Steuerkreuz,
 A, B). Oben rechts steht das Profil, das Konto des Browsers: Name, Farbe, die eigene Figur, die
 winkt, sobald der Name sich ändert, und wie viele Einsätze das Konto gespielt hat. Das Konto bewahrt
 Name, Farbe, Erfolge und Läufe über Neustarts und Deploys hinweg; *Meine Einsätze* listet seine
@@ -115,8 +115,8 @@ Weg als Link ist `/?demo=1` (für einen QR-Code), „Zuschauen beenden" führt z
 (`docs/gameplay.md`, „Die Demo"). Eine offene Demo-Seite fragt alle vier Minuten `/health` ab und
 hält so einen Server wach, der ohne Anfragen einschläft (Render Free: 15 Minuten); nach einem
 Neustart oder Verbindungsabbruch ist sie von selbst wieder da. Auf einem quer gehaltenen Handy
-fehlen *Editor*, *QR-Code* und die Einstellungen (sieben Punkte füllen 390 px Höhe); *Demo* bleibt,
-denn Gäste kommen mit dem Handy. *QR-Code* zeigt die Adresse der Seite groß als QR-Code (schwarz auf
+fehlen *Editor*, *QR-Code*, *Arcade* und die Einstellungen (sieben Punkte füllen 390 px Höhe); *Demo*
+bleibt, denn Gäste kommen mit dem Handy, und *Arcade* öffnet in jeder Lobby. *QR-Code* zeigt die Adresse der Seite groß als QR-Code (schwarz auf
 weiß, ohne fremden Dienst, auch offline), in der Lobby öffnet „QR" neben dem Raumcode den
 Einladungslink als Code, und neben der Demo steht die Adresse klein zum Mitnehmen
 (`docs/gameplay.md`, „QR-Codes"). Bindet ein laufender Einsatz den Dienstausweis, steht seine Karte
@@ -133,7 +133,7 @@ Labor der gewählten Mission, das langsam vorbeizieht; rechts steht die eigene F
 Handlampe, deren Kegel das Labor erhellt. Jeder Menüpunkt hat in Blackouts Labor einen eigenen Raum,
 zu dem die Kamera beim Darüberfahren langsam schwenkt (`docs/art-bible.md`, „The menu's places"):
 *Einsatz starten* (die Missionskarten, „Runde eröffnen"), *Beitreten*, *Offene Runden*, *Demo*,
-*QR-Code*, *Handbuch*, *Bestenliste*, *Meine Einsätze*, *Editor* und *Einstellungen* — mit der Maus,
+*Arcade*, *QR-Code*, *Handbuch*, *Bestenliste*, *Meine Einsätze*, *Editor* und *Einstellungen* — mit der Maus,
 der Tastatur (Pfeile, Enter, Esc) oder dem Controller (Steuerkreuz, A, B). Oben in der Leiste steht
 das Konto des Browsers: der Kopf der eigenen Figur in ihrer Farbe, der Name und, wo Platz ist, wie
 viele Einsätze das Konto gespielt hat; ein Klick öffnet „Konto" in den Einstellungen, am Handy steht
@@ -155,6 +155,15 @@ zurück durch eine kurze Blende; ab dem ersten Klick oder Tastendruck spielen Ti
 Anlagenbrummen, in der Lobby leiser weiter. Die Endkarte spielt nach ihrem Stinger ein eigenes
 Thema: hell für einen gewonnenen, ein tiefes Dröhnen für einen verlorenen Einsatz. Alle Musik und
 alle Geräusche sind mit ElevenLabs erzeugt, keine Archivmusik (`docs/sound.md`, Abschnitt „Lizenz“).
+
+**Spielautomat im Pausenraum:** *Arcade* im Menü, „Arcade" in der Lobby und auf jeder Karte, die
+warten lässt — die eigene Leitung weg, die Wartung, jemand aus der Crew fehlt — öffnet „Ferret vs
+Ducks", das Spiel von Uros, als Automaten des Werks: klassisch genau wie das Original oder modern
+(ab Welle 2 Kombos, Extras, Sturzflieger, Helme, alle fünf Wellen ein Boss), mit Tastatur oder
+Touch, die Rekorde in diesem Browser. Er sendet nichts und ändert nichts am Einsatz; kommt, worauf
+gewartet wurde — der Start, die Leitung, die Anlage, der Einsatz geht weiter —, pausiert das Spiel,
+der Automat schließt sich, und eine Zeile sagt warum („Die Schicht beginnt."). Musik und
+Raumklang des Labors treten so lange zurück (`docs/gameplay.md`, „The break-room machine").
 
 **Ablauf einer Partie:** Lobby (Farbe wählen, **bereitmelden** — der Host kann erst starten,
 wenn so viele da sind, wie die Mission braucht, und alle bestätigt haben; jede Änderung an

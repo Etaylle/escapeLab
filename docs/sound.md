@@ -330,7 +330,10 @@ short sound a change at most, a voice each from the budget like every effect, no
 audience's screen; nothing of it lasts or loops, so the five lines' motion — a CSS animation each
 packet, no frame loop — costs the audio nothing per frame.
 
-**Ducking.** Mission control's voice pulls the music 8 dB and the beds 4 dB down while it is on
+**Ducking.** The break-room machine (arcade/, gameplay.md) pulls the music 30 dB and the beds
+18 dB down for as long as it stands open, and lets them back up as it closes: no stem stops or
+starts, the menu's theme and the lobby's piece go on where they were (the source `arcade`).
+Mission control's voice pulls the music 8 dB and the beds 4 dB down while it is on
 the air — from its opening squelch where it opens a run, else from its first word — and the
 klaxon, the alarm's sting and the siren pull the music 6 dB down while they sound, and a piece the
 settings play for the ear pulls it 24 dB down while it plays (Musikpakete); where several
@@ -362,6 +365,13 @@ drones are placed, the music follows the clock — and each of them schedules wh
 audio clock (`AudioContext.currentTime`), the own room's sporadic sounds 0.4 s ahead, the
 music's elements a second ahead. Your own footsteps and the doors still come from the frame
 loop, on the frame their step lands or their leaf starts to move.
+
+**The break-room machine** (`arcade/sound.ts`, `arcade/music.ts`) synthesises its own cues and
+its chiptune loop, as Uros's game did, through two gains of its own (its Info's „Musik" and
+„Effekte") behind its own sound switch, into one bus of the lab's: the effects' (`mix.sfx`). The
+lab's „Effekte", its „Gesamt" and the sound switch reach the machine there, and the brickwall
+covers it; the effects' send gives it a touch of the room it stands in. Closing the machine stops
+every note it laid ahead and lets its graph go.
 
 ## What a page keeps (`samples.ts`, `audioStream.ts`, `audioMemory.ts`)
 

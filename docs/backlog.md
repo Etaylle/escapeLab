@@ -13,6 +13,15 @@ die Entscheidung.
 
 ## Bereit
 
+### W-arcade-2 Bestenliste des Spielautomaten — Status: wartet · Größe: M
+- Die Rekorde von „Ferret vs Ducks" liegen nur im Browser (`escapelab-arcade-best-*`). Eine
+  Bestenliste auf dem Server je Schwierigkeit und Regelwerk, Klassisch und Modern getrennt, an
+  das Konto gebunden; Punkte prüfbar machen (der Server spielt nicht mit, also nur plausibel).
+
+### W-arcade-3 Ein zweites Spiel im Automaten — Status: wartet · Größe: M
+- Der Pausenraum-Automat (`client/src/arcade/`) zeigt ein Spiel. Ein zweites eigenes Spiel
+  daneben, wählbar im Automatenmenü, als eigener Chunk.
+
 ### F-1 Fundament-Fehler der Rückmeldung — Status: erledigt (N-foundation, Merge 2026-11-01) · Größe: M
 - Pause hält die Uhr nur auf dem Server an: HUD-Countdown, Pieptöne und der Schlag bei 0
   laufen weiter, verbrauchte Pieptöne fehlen danach (`screens/Game.tsx`, `world/sim.ts`,
