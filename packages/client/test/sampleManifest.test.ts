@@ -61,6 +61,11 @@ const AWAITING_RENDER: readonly string[] = [
   'critical',
   'end-lost',
   'end-won',
+  // The reactor hall's beds, asked for anew on 2026-11-19 (docs/sound.md „Die Räume"): the steady
+  // sub-bass drone and the line the ear locks onto gone. Until a take is kept each plays its
+  // older recording, the powered one at its new, lower level.
+  'bed-reactor',
+  'bed-reactor-idle',
 ];
 const awaiting = new Set(AWAITING_RENDER);
 
@@ -112,15 +117,23 @@ describe('the entries awaiting the user’s render', () => {
     expect(unexpected, `no recording, or a stale one — ${remedyFor(unexpected)}`).toEqual([]);
   });
 
-  it('play a recording of the catalog meanwhile where they name one, none of their own', () => {
+  it('play meanwhile a recording of the catalog they name, or an older one of their own', () => {
     for (const id of AWAITING_RENDER) {
       const entry = catalog.find((each) => each.id === id);
       expect(entry, `${id} is in the catalog`).toBeDefined();
       const kept = sfx[id];
       if (entry === undefined || kept === undefined || upToDate(entry, kept)) continue;
-      const borrowed = kept.standIn ?? '';
-      expect(sfx[borrowed]?.file, `${id} names the recording it borrows`).toBe(kept.file);
       const own = existsSync(join(DIRS.sfx, `${id}.mp3`));
+      if (kept.standIn === undefined) {
+        // An older take of its own: its file, made by ElevenLabs from a request since rewritten.
+        expect([kept.file, own, kept.source], `${id} plays its older take`).toEqual([
+          `${id}.mp3`,
+          true,
+          'elevenlabs',
+        ]);
+        continue;
+      }
+      expect(sfx[kept.standIn]?.file, `${id} names the recording it borrows`).toBe(kept.file);
       expect(own, `${id} has no file of its own yet`).toBe(false);
     }
   });

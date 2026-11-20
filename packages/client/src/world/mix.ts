@@ -19,10 +19,10 @@
  * stacked on one another never clip; Web Audio raises everything after it by a makeup gain worked
  * out from those settings (`limiterMakeup`), which the trim takes back, so the mix under the
  * threshold plays as loud as before. Ducking (`duck`): mission control's voice pulls the music
- * 8 dB and the beds 4 dB down, the klaxon and the siren pull the music 6 dB down, a preview the
- * music 24 dB, the break-room machine the music 30 dB and the beds 18 dB; where several pull at
- * once the deepest holds. A bus goes down over DUCK_ATTACK_S and comes back over DUCK_RELEASE_S,
- * in straight lines on the audio clock (`duckKnots`, pure).
+ * 12 dB and the beds 4 dB down, the crew's voices the music 8 dB, the klaxon and the siren the
+ * music 6 dB, a preview the music 24 dB, the break-room machine the music 30 dB and the beds
+ * 18 dB; where several pull at once the deepest holds. A bus goes down over DUCK_ATTACK_S and
+ * comes back over DUCK_RELEASE_S, in straight lines on the audio clock (`duckKnots`, pure).
  */
 
 /** The volumes, each a share of full (0 to 1): the master's and the buses'. */
@@ -168,7 +168,7 @@ export type Depths = Readonly<Partial<Record<DuckSource, number>>>;
 
 /** How far the sources pull the music and the beds down, dB. */
 export const DUCK_DB: Readonly<Record<'music' | 'ambience', Depths>> = {
-  music: { voice: -8, alarm: -6, siren: -6, crew: -8, preview: -24, arcade: -30 },
+  music: { voice: -12, alarm: -6, siren: -6, crew: -8, preview: -24, arcade: -30 },
   ambience: { voice: -4, crew: -4, arcade: -18 },
 };
 /** A bus goes down over this long, s… */
@@ -285,7 +285,7 @@ function pull(mix: Mix, source: DuckSource, dip: Dip, now: number): void {
  * How far the run's voice, its klaxon and its siren pull the break-room machine down (arcade/),
  * dB: the run's sounds stand over the machine, never the other way round.
  */
-export const MACHINE_DB: Depths = { voice: -10, alarm: -8, siren: -8 };
+export const MACHINE_DB: Depths = { voice: -12, alarm: -8, siren: -8 };
 
 /**
  * The gain `param` follows the pulls of `mix` from `now`, by `depths`, as the buses do — set at

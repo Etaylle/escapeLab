@@ -1185,6 +1185,29 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   `100vh − 140px`), `?room=` nimmt höchstens zehn Zeichen, je ein Test für den Chip nur in der
   Lobby und für das QR-Panel des Menüs.
 
+### M-tension Musik, die mit dem Geschehen wächst; ein Reaktor, der nicht dröhnt — Status: im PR (M-tension) · Größe: M
+- Anlass (Uros, 2026-11-19): die Musik soll „mehr" werden, wenn es heiß wird, wie in einem
+  Actionspiel; der Klang des Reaktors nervt.
+- Gemessen an den Läufen der Demo-Crew (Seeds 12/56/93, je Sitz): bisher 94–95 % ruhig, die
+  Spannung nie, die Not nur in der Flucht. Jetzt drückt der eigene Blick des Spielers den Druck
+  (`pressureSignals.ts`): Notfall +0,8, die Uhr einer Station am eigenen Pult +0,45 bis +0,65,
+  eine wache Drohne in vier Feldern +0,35, die gelösten Stationen bis +0,25; ein Stoß hält 8 s
+  und fällt dann 0,04/s, ein Stamm bleibt 8 s (außer der kritische kommt). Ergebnis: ruhig
+  44–56 %, Spannung 32–43 %, Not 11–13 %, 10–13 Wechsel (Tabelle in sound.md „Music that
+  breathes"); die Spur liegt in `client/test/tensionTraces.json`, ein Servertest prüft sie.
+- Reaktorhalle: beide Betten neu angefragt (kein stehender Ton, keine Tonhöhe), das Bett mit
+  Strom −4 dB. Offen bei Uros, im Hauptcheckout `packages/client`, rund 240 Credits:
+  `node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts --candidates 3 --only bed-reactor,bed-reactor-idle`
+  — bis dahin spielen die alten Aufnahmen (`AWAITING_RENDER`).
+- Kein vierter Stamm: Uros will stattdessen (2026-11-20) Musik „mit auch Stimmen und etwas
+  hörbarer". Hörbarer ist gebaut: die Stämme +5 dB (−57 → −52 dBFS RMS, über den Betten der
+  einfachen Räume), unter der Leitstelle −12 statt −8 dB (sound.md „How loud the music sits").
+- Die Partitur mit Stimmen steht im Katalog (sound.md „The voices"): Summen, „oh" und „ah" ohne
+  Worte in den Stämmen, Lobby und Eröffnung ohne Stimme, deutsche Zeilen im Hauptthema und in der
+  Morgendämmerung, ein verlöschendes Summen bei „Lights Out"; das Skript lässt Liedzeilen nur in
+  `sung`-Abschnitten zu. Offen bei Uros: zwei Takes der Partitur (17.665 Credits), nach Gehör
+  einen ganz behalten.
+
 ## Nur lokal
 
 ### L-1 Aufnahmen rendern — Status: erledigt (2026-11-04, ec0ef9c + 031cb7a)

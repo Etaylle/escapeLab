@@ -178,6 +178,11 @@ describe('the layers, recorded loops', () => {
     const faintest = db.reduce((a, b) => (b[1] < a[1] ? b : a));
     expect([loudest[0], faintest[0]]).toEqual(['server', 'archive']);
     for (const [, level] of db) expect(Math.abs(level)).toBeLessThanOrEqual(10);
+    // The reactor's hall a dB under the other machine rooms: its idle rumble plays beneath.
+    expect(POWERED.reactor?.db).toBe(-4);
+    for (const kind of ['lab', 'control', 'plain'] as const) {
+      expect(POWERED.reactor?.db ?? 0).toBeLessThan(POWERED[kind]?.db ?? -Infinity);
+    }
   });
 
   it('plays sporadic sounds from recorded one-shots, a voice each, never out of reach', () => {

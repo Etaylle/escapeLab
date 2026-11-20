@@ -57,12 +57,12 @@ describe('a bus pulled down', () => {
   const dips = (entries: [DuckSource, Dip][]): Map<DuckSource, Dip> => new Map(entries);
   const music = (source: DuckSource): number => 10 ** ((DUCK_DB.music[source] ?? 0) / 20);
 
-  it('pulls the music 8 dB under a voice, 6 under the klaxon and siren, 24 under a preview', () => {
+  it('pulls the music 12 dB under the radio, 8 under the crew, 6 under klaxon and siren, 24 under a preview', () => {
     // A voice: mission control's on the radio, and the crew's in the lobby over the menu's sound;
     // a preview: a piece the settings play for the ear (musicPreview.ts). The beds feel voices;
     // the break-room machine open pulls the music 30 dB and the beds 18 dB (arcade/).
     expect(DUCK_DB).toEqual({
-      music: { voice: -8, alarm: -6, siren: -6, crew: -8, preview: -24, arcade: -30 },
+      music: { voice: -12, alarm: -6, siren: -6, crew: -8, preview: -24, arcade: -30 },
       ambience: { voice: -4, crew: -4, arcade: -18 },
     });
     expect([DUCK_ATTACK_S, DUCK_RELEASE_S]).toEqual([0.05, 0.4]);
@@ -91,9 +91,9 @@ describe('a bus pulled down', () => {
     const knots = duckKnots(both, DUCK_DB.music, 10, 1);
     expect(knots.map(({ at, level }) => [at, Number(db(level).toFixed(2))])).toEqual([
       [10, 0],
-      [10.05, -8],
-      [11, -8], // the klaxon comes in: the voice pulls deeper, nothing moves
-      [12, -8],
+      [10.05, -12],
+      [11, -12], // the klaxon comes in: the voice pulls deeper, nothing moves
+      [12, -12],
       [12.4, -6], // the voice ends: back up to the klaxon's depth over 400 ms
       [14, -6],
       [14.4, 0],

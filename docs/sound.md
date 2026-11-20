@@ -53,13 +53,15 @@ pnpm --filter client sfx -- --candidates 2 --only score  # two takes of the whol
 pnpm --filter client sfx -- --keep score=2               # its take 2 kept whole, cut in pieces
 ```
 
-**Awaiting a render.** Nine entries await a render by the user — the agents that write the
+**Awaiting a render.** Eleven entries await a render by the user — the agents that write the
 catalog may not spend the account's credits, the permission system holds any paid request back —
 and the game plays meanwhile what there is. The facility's hum, whose three takes of 2026-11-13
 came back near silent, has no recording, and the menu plays without it. The
 score's eight pieces play the recordings the stems, the menu's theme and the end cards' themes had
 before it, their manifest entries made from the older requests; the lobby plays the menu's theme
 at its weight, the opening its older cue (`public/intro/`), until a take of the score is kept.
+The reactor hall's two beds, asked for anew on 2026-11-19, play their older takes (Rooms you can
+hear, below).
 `test/sampleManifest.test.ts` names them in its title — `AWAITING_RENDER`, to be emptied once they
 are made — and fails for any other entry without a recording of its own, made from its request as
 it stands. The score's render and keep are under „Takes und Auswahl" (below); the hum's:
@@ -333,9 +335,10 @@ packet, no frame loop — costs the audio nothing per frame.
 **Ducking.** The break-room machine (arcade/, gameplay.md) pulls the music 30 dB and the beds
 18 dB down for as long as it stands open, and lets them back up as it closes: no stem stops or
 starts, the menu's theme and the lobby's piece go on where they were (the source `arcade`).
-Mission control's voice pulls the music 8 dB and the beds 4 dB down while it is on
+Mission control's voice pulls the music 12 dB and the beds 4 dB down while it is on
 the air — from its opening squelch where it opens a run, else from its first word — and the
-klaxon, the alarm's sting and the siren pull the music 6 dB down while they sound, and a piece the
+klaxon, the alarm's sting and the siren pull the music 6 dB down while they sound, the crew's
+voices in the lobby 8 dB, and a piece the
 settings play for the ear pulls it 24 dB down while it plays (Musikpakete); where several
 pull at once the deepest holds, and as one lets go the bus comes back to the next deepest. A bus
 goes down over 50 ms and comes back over 400 ms, on straight lines laid on the audio clock from
@@ -352,8 +355,8 @@ crew's voice, below).
 
 Levels, at the master gain: the effects around 0.04 (`EFFECTS_LEVEL`) for a recording whose
 peak stands at −3 dBFS; a room's bed 0.03 for one at −20 dBFS RMS, each layer a few dB up or
-down from it; the music 0.02 for a stem at −20 dBFS RMS — its RMS 26 dB under the effects'
-level, about where the synthesised pad sat; the end card's sting its RMS 8 dB under the
+down from it; the music 0.036 for a stem at −20 dBFS RMS — its RMS 21 dB under the effects'
+level (How loud the music sits, below); the end card's sting its RMS 8 dB under the
 effects' level; the loops of the mains hum, the siren and the drone at levels that put each
 about where the sound it replaced sat; the radio voice at 0.12 of a line's peak; a partner's
 step at 0.02 before it is placed, your own 4 dB under it.
@@ -372,8 +375,14 @@ its chiptune loop, as Uros's game did, through two gains of its own (its Info's 
 lab's „Effekte", its „Gesamt" and the sound switch reach the machine there, and the brickwall
 covers it; the effects' send gives it a touch of the room it stands in. The run's sounds stand
 over it: one gain of the machine's follows the mix's pulls (`followDucks`, `MACHINE_DB`), so that
-mission control's voice pulls the machine 10 dB down and the klaxon, the alarm's sting and the
-siren 8 dB, while the machine pulls neither the radio, the loudspeakers nor the effects. Closing the machine stops
+mission control's voice pulls the machine 12 dB down, as it pulls the music, and the klaxon, the
+alarm's sting and the siren 8 dB, while the machine pulls neither the radio, the loudspeakers nor
+the effects. Levels (2026-11-20, against „How loud the music sits", the settings at their
+defaults): the machine's tune comes out at −42.2 dBFS RMS over its 128-step loop, its shot peaks
+at −28.9 dBFS. Open, it pulls the lab's stems from −52.0 to −82.0 and the loudest bed (the server
+room, −47.5) to −65.5: its tune stands 23 dB over any bed and 40 over the music. Under a radio
+line (RMS about −31.3) the tune sits at −54.2 and a shot's peak at −40.9: the line stands some
+23 dB over the tune, as the lab's own music, now 12 dB down, stands under it. Closing the machine stops
 every note it laid ahead and lets its graph go.
 
 ## What a page keeps (`samples.ts`, `audioStream.ts`, `audioMemory.ts`)
@@ -485,7 +494,7 @@ played a little faster or slower each time.
 | archive | `bed-archive` −8 dB: soft air through a duct | a drip every 7–12 s |
 | corridor | `bed-corridor` −2 dB: vent hum and duct air | a clank far down the corridor every 20–40 s |
 | lab | `bed-lab` −3 dB: a fridge's compressor, a fume hood, bubbling every 10–25 s | a creak now and then |
-| reactor | `bed-reactor`: the containment hum | `bed-reactor-idle`: the core's rumble, a throb on its beat |
+| reactor | `bed-reactor` −4 dB: duct air and coolant flow, an uneven pump pulse | `bed-reactor-idle`: the core's rumble, a throb on its beat |
 | control | `bed-control` −3 dB: console hum, screens' whine, a relay's tick every second | a creak now and then |
 | plain | `bed-plain` −3 dB: ventilation and a 55 Hz building hum | a far clank, or a creak a third of the time, every 7–15 s |
 
@@ -505,6 +514,32 @@ warm-up (`rooms.ts` `warmUp`, dips and all); a room lit before the
 screen looked comes back at once. A run won powers every room again. The reactor's throb,
 which swells for a third of a second, comes that much before the top of the core's light, 2.4 s
 apart on the simulation's clock.
+
+**The reactor hall, asked for anew** (2026-11-19). Its powered bed was the annoying one: asked
+for as „a steady deep containment hum at 110 Hz", it came back as a steady sub-bass drone — 86 %
+of its power under 90 Hz, broad between 40 and 70 Hz, its loudness swinging 0.9 dB over 0.25 s
+windows, a line at 178 Hz standing 13 dB over its neighbours, no 110 Hz line at all — at the level
+of the server room once its idle bed, played beneath it in the hall itself, is added. The idle
+bed's 94 Hz line stands 14 dB over its neighbours, a pitch the ear locks onto. Both prompts now
+ask for a broad, slowly moving machine-room texture — duct air and coolant flow, an uneven pump
+pulse, metal settling far off, energy held back — with no steady tone, no pitched hum and nothing
+high or sharp; the powered layer plays at −4 dB, a dB under the lab, the control room and the
+plain rooms, for the idle layer under it. The throb on the core's beat (75–85 Hz, 1.5 s, every
+2.4 s) stays: it is the light's pulse made heard, and a metronome only where the drone under it
+had no motion of its own — to be judged again once the new beds are in. Until the user renders
+them (Awaiting a render, above) both play their older takes, the powered one at its new level:
+
+```sh
+# packages/client — offline, no key: 2 beds, 3 takes each, about 240 credits
+node scripts/sfx.ts --dry-run --candidates 3 --only bed-reactor,bed-reactor-idle
+node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
+  --candidates 3 --only bed-reactor,bed-reactor-idle
+```
+
+The run keeps of each bed the take `PICK` picks and leaves all six in the temporary folder it
+names (`afplay <folder>/<file>.mp3` plays one); the kept one plays on `/sounds` at the game's
+level, „Räume und Schleifen". `--keep` keeps music takes only: a different candidate of a bed is
+had by running the bed again (`--candidates 3 --only bed-reactor`, 120 credits).
 
 ### The room's answer (`reverb.ts`)
 
@@ -1187,9 +1222,9 @@ the lobby and the dawn the whole, the opening and the lights going out the first
 stems the cell alone, which the calm stem breaks into fragments, the tense stem's ostinato is built
 from and the last minute hammers — no chunk is told to play a melody its section avoids. The motif
 is shared by construction: one request, one generation, every chunk told the same cell and played on
-from the chunk before. A wordless voice — a solo female voice on an open „ah", written as a voice's
-sound in parentheses and never as a word — carries the answering phrase once in the main theme and
-sings the motif once more at dawn; nowhere else.
+from the chunk before. Human voices carry it besides (The voices, below): a solo female voice sings
+it in German in the main theme and at dawn, and a small choir hums, breathes and calls it without
+words in the run.
 
 **The pieces**, in the order of the plan, which is the order a crew hears them; a loop's bars that
 go round, and its tail of three:
@@ -1216,11 +1251,11 @@ asking three times for 90 bpm. A loop's section is written three bars longer tha
 the game catches a next pass up in, and the bars its 3 s seam crosses in, with a second to spare
 (suite.ts `tailBars`) — and is told to stay steady to its last bar and to come back to its opening;
 the cut keeps the tail, and the game loops on the bars the manifest names. What never appears: words
-of any kind, drums in the menu, the lobby, the opening, the calm stem and the endings, a voice in
-the run, an electric guitar, a drop, a change of tempo, sound effects (the suite's and each
-section's `avoid`). `test/suiteScript.test.ts` holds the catalog to all of it: the order, the
-lengths, the stems' grid, the key, the tempo and the motif in every chunk, the voice where it
-belongs and nowhere else, the drums kept out.
+outside the main theme and the dawn, a voice in the lobby and the opening, drums in the menu, the
+lobby, the opening, the calm stem and the endings, an electric guitar, a drop, a change of tempo,
+sound effects (the suite's and each section's `avoid`). `test/suiteScript.test.ts` holds the
+catalog to all of it: the order, the lengths, the stems' grid, the key, the tempo and the motif in
+every chunk, the words and the voices where they belong and nowhere else, the drums kept out.
 
 **What Expedition 33 showed, and what was not taken.** Its music is remembered as music, not as
 background: a melody comes back, piano and a few strings carry the feeling, a voice without words
@@ -1266,7 +1301,9 @@ setting the tone of the whole (ElevenLabs' API reference and its guide „Compos
 2026-11). The main theme comes first, the fullest statement of the motif, so that its tone sets
 the rest. A plan takes no switch for the instrumental as a prompt does (`force_instrumental`):
 here the lines are the switch, and the catalog's rules refuse any line that is neither a
-direction nor a voice's sounds. Eleven Music's overview page still names 5 minutes for a song;
+direction nor a voice's sounds — but in a section marked `sung`, where a line may be a line of
+its German lyric (sfx.ts `LYRIC`: letters with umlauts and ß, a verse's punctuation, no braces or
+parentheses), and which has to sing one. Eleven Music's overview page still names 5 minutes for a song;
 the score's 491 s keep within the 10 minutes the composition plans name. A plan of that length
 takes the service some two to four minutes to compose, so the script waits up to 15 for it
 (sfx.ts `SUITE_TIMEOUT_S`), where the SDK would give up after 4. Should the service refuse the
@@ -1275,6 +1312,53 @@ still have been billed, which the account's credits tell. Every section states t
 none asks for another: a quiet piece is sparse, its notes held long at the same tempo, as the
 last minute's double time is a feel at the same tempo — the plan's bar lines, which the loops are
 cut on, hold only where the music keeps them.
+
+**The voices** (2026-11-20). Uros asked for music „mit auch Stimmen und etwas hörbarer"; the
+second half is the level (How loud the music sits, below). For the first, the suite keeps
+everything that makes it the game's own — the night shift in a dark research lab, the motif above,
+A minor and the dawn's C major, 90 bpm, the same sections, bars and tails, the stems' 72 s loops
+on one grid, calm, tense and critical growing by the layers that enter — and gives the motif to
+human voices, so that the one theme is what is remembered: a solo female voice and a small choir,
+never a soloist's showpiece. In the run the voices are wordless — a closed hum („mm") in the calm
+stem, low voices on a held „oh" breathing with the bass pulse in the tense one, the choir on „ah"
+hammering the motif's leap with the horns in the critical one — since words would fight the
+Leitstelle's lines, the loudspeakers and the German texts on screen; wordless voices sit in the
+speech's range too, which the radio's deeper duck (12 dB) answers. The lobby (the crew talks
+there) and the opening (under the announcement) stay without voices. Words only where nobody
+talks: the main theme sings two lines a phrase of its own German in its second half, the dawn two
+over the motif in C major. „Lights Out" sings no word — the lost card is read, and a sung line over
+a defeat comes out sentimental — but a low hum that follows the motif down and dies with the pad.
+No composer, game, singer or piece is named to the service, and the lines quote nothing. The
+catalog's changes against the score before, section by section:
+
+| Section | Lines (new or changed) | Styles added | Avoid, changed |
+| --- | --- | --- | --- |
+| suite | — | „a solo female voice and a small wordless chamber choir carry the motif", „one strong, singable melody throughout" | „lyrics" moves into the sections |
+| Main Theme (`sung`) | {felt piano alone states the main motif} · {chamber strings answer the motif} · Die Nacht hält still im Labor, · nur die Lampen wachen noch. · Wer jetzt geht, der kehrt zurück, · wenn das Licht den Morgen findet. · {the piano alone again over a soft held string chord} | „a solo female voice sings the motif in German in the second half, intimate, close to the microphone" | „choir" kept out, „belting", „pop vocals" |
+| Interlude, Opening | — (no voice) | — | „lyrics" in |
+| Night Shift (calm) | + (mm) | „a small distant choir hums the motif's leap on a closed mm, very soft, now and then" | „voice", „vocals" out; „lyrics", „solo voice" in |
+| Pressure (tense) | + (oh) | „low male voices on a sustained oh, breathing with the bass pulse" | „voice", „vocals" out; „lyrics", „solo voice" in |
+| Last Minute (critical) | + (ah) | „a wordless choir on ah hammers the motif's leap with the horns" | „voice", „vocals" out; „lyrics", „solo voice" in |
+| Lights Out | + (mm) | „a low female hum follows the motif down and dies with the pad" | „voice", „vocals" out; „lyrics", „choir" in |
+| Dawn (`sung`) | {strings carry the motif into the major} · Die Türen offen, der Morgen ist da, · wir gehen hinaus ins Licht. · {a long held final chord} | „the solo female voice sings the motif once in German, warm, at rest" | — |
+
+Budgets: the sections, bars and tails stay, so the suite stays at 490.7 s: two takes 17,665
+credits (`CREDITS_PER_SECOND` 18), under the 18,000 cap a run, and 10.3 MiB of the music
+folder's 11 MiB once kept (the pieces at 160 kbit/s, the two stings beside them). A third take
+passes the cap in one run (26,497 credits); a second run of one take adds it (8,833 credits),
+the account keeping its 40,000 floor. A take is chosen whole, by ear on `/sounds` — its pieces
+are one generation, and a stem of one take crosses badly into a stem of another — so „candidates
+per piece" means two or three takes of the whole suite.
+
+**Comparing two takes.** On `/sounds` under „Partitur" each take stands as a row with its pieces
+in the plan's order. Take them piece by piece across the takes, not take by take: the main theme
+of take 1, then of take 2 — are the German words understood, is the voice close and plain, no
+belting? —; then the three stems of one take one after the other, calm, tense, critical, and the
+same of the other — does a word slip into the run, does the choir stay under the piano and the
+horns, does each stem hold its pulse to its last bar (amber in its line: it would fail the game's
+recordings)? —; then the two endings. Keep the take whose stems are right even where the other's
+main theme is lovelier: the stems are heard for the whole of every run, the theme in the menu.
+„Diesen Take wählen" shows the command that keeps it whole.
 
 ## Music that breathes (`music.ts`)
 
@@ -1295,8 +1379,49 @@ code.
 
 The pressure follows the clock — the tension curve the lab always had, 0 while half the time
 or more is left and rising to 1 at the end, and at least 0.8 in the last minute — adds 0.15
-for 20 s with every alarm, and stays at 0.8 at least in the escape. A stem goes only a little
-under its threshold before it leaves, so a wavering pressure never flips it. Every alarm the
+for 20 s with every alarm, and stays at 0.8 at least in the escape. Since 2026-11-19 it follows
+the run besides, as this player's own view and the drones show it (`pressureSignals.ts`): +0.8
+while an emergency runs (the critical stem on its own); +0.45 while a station's own clock runs
+at this player's console — the Paketfilter's wave falling, the Anlaufsteuerung's pulse on its
+way to the ladder at the console that takes it, a Synchrontaster press waiting in its window,
+the token's period at the Zugangskontrolle's device — and up to 0.2 more as that clock runs out
+where the view gives its end (the wave's does not); +0.35 while a drone awake flies within four
+tiles; and up to 0.25 with the stations solved, so that the last stations sit higher than the
+first, under the tense stem's way out. A push comes in at once; once it is over the pressure
+stays where it was for 8 s, then falls 0.04 a second (`moodAt`). A stem goes only a little under
+its threshold before it leaves, so a wavering pressure never flips it, and it stays on at least
+8 s from its change — the critical one excepted, which comes at once. A quiet stretch — walking,
+reading at a source with nothing running — falls back to calm. Each player's music is their
+own: the one reading at a source while the wave falls at the console hears the calmer one. The
+demo's player view plays the seat it watches, so its music follows that seat; the audience
+stands nowhere and hears no music, as before.
+
+What that comes to was measured on the demo crew's runs (`server/test/tensionTrace.test.ts`
+records each seat's signals on the fake clock into `client/test/tensionTraces.json`, and proves
+the file is what the crew plays; `UPDATE_TRACES=1` writes it anew; `client/test/stemTimeline.ts`
+turns it into the stems on air, bar by bar). Shares of a winning Blackout run, the two seats:
+
+| Run | Before: calm / tense / critical | After: calm / tense / critical | Changes |
+| --- | --- | --- | --- |
+| seed 12, 379 s | 95 / 0 / 5 % | 56 / 32 / 12 %, 53 / 34 / 12 % | 13, 11 |
+| seed 56, 351 s | 94 / 0 / 6 % | 44 / 43 / 13 %, 49 / 38 / 13 % | 13, 12 |
+| seed 93, 362 s | 95 / 0 / 5 % | 52 / 36 / 11 %, 52 / 35 / 12 % | 13, 10 |
+| seed 56, a slow crew, 662 s, 2 alarms | 92 / 5 / 4 % | 46 / 33 / 21 %, 47 / 37 / 16 % | 15, 15 |
+
+Before, only the escape left the calm stem; after, every stem plays 8 s or more but where the
+critical one cuts in on the next bar. The demo crew weathers an emergency in 12 s; a crew that
+takes its 45 s hears more of the critical stem.
+
+**A fourth stem, not made.** An `overdrive` stem above the critical one — its material with
+driving drums and a distorted bass line, for the escape and an emergency late in the run — was
+weighed and left: as a ninth section of the score (27 bars, 72 s) it would raise the score's two
+takes from 17,665 to about 20,257 credits, past the music's cap of 18,000 a run; the music folder
+would keep it (some 1.5 MB of the 1.6 left under 11 MiB once the score is kept), the loop budget
+too (two stems heard at most, as now). Made on its own as a suite of one section it would cost
+2,592 credits for two takes, but be a generation of its own, not one with the stems it crosses
+into. Either way the music's eight places (`packFile.ts` `SLOTS`) would need a ninth that a pack
+may leave out — every CC pack falling back to its critical piece — outside the Feinwahl. Uros
+chose voices and a louder music instead (2026-11-20, the proposal under Score, above). Every alarm the
 music hears brings the alarm's sting with it, two seconds of brass and strings on the effects'
 bus, the music pulled 6 dB down under it.
 
@@ -1320,6 +1445,21 @@ end card streams its sting once on the music's bus (`playSting`): `won`, strings
 rising to a C major chord over a breath of wind, or `lost`, a low A-minor chord sinking into
 silence. The heartbeat that quickened through the last minute is gone with the synthesised layers:
 the critical stem carries the last minute.
+
+## How loud the music sits
+
+Measured from the levels in code (2026-11-20), RMS at the master gain, the settings at their
+defaults (Musik 70 % = −3.1 dB, the rest 100 %): a stem at −20 dBFS after its gain came out at
+−57.1 dBFS — under every bed but the archive's (plain rooms, the lab and the control room −53.5,
+the corridor −52.5, the reactor's two layers together −49.5 since M-tension, the server room
+−47.5, the archive −58.5) and some 26 dB under the radio (a line's peak at −19.3 dBFS, its RMS
+about 12 dB under that). Where a bed played, the bed covered the music. Now the stems sit 5 dB
+higher (`MUSIC_LEVEL`, 21 dB under the effects' level instead of 26): −52.0 dBFS, a dB or two
+over the plain rooms, under the server room, still some 21 dB under the radio. So that no line
+is masked, the radio's duck goes from 8 to 12 dB: under a line the music sits at −64.0, a dB
+over where it sat before (−65.1). The same level carries the menu's theme, the lobby's, the
+opening's cue and the end card's theme (all on `MUSIC_LEVEL`), and the settings' preview of a
+piece. The crew's voices still pull it 8 dB, the klaxon and the siren 6.
 
 ## What the budget changed, to the ear
 
@@ -1406,7 +1546,7 @@ comes near and let go 4 s after, the rest brought in as the lights fail, the roo
 `test/spatial.test.ts` (pan, the inverse model and its 12 tiles, a wall's 600 Hz, 6 dB and 15 ms,
 steps on the floor under a partner, the rotor, the chirp and the fly-by placed, the doors placed and
 the audience's unplaced), `test/radioVoice.test.ts` (the chain, the shaper's distortion, the
-static's level, the speech, the squelches' recordings, the Leitstelle's opening, the music 8 dB and
+static's level, the speech, the squelches' recordings, the Leitstelle's opening, the music 12 dB and
 the beds 4 dB down, no recording fetched as a run starts and each line's own as it is queued,
 decoded only on the air, the files of the last four kept and none of a run before, a line let go
 once its sound has ended however late and not while it is on the air again, the newest of two and
@@ -1680,7 +1820,7 @@ more, piano arpeggios like first light, coming to rest on a long held chord — 
 music breaking off, the motif sunk into the piano's low register over a bowed bass, the pad dimming
 like failing lights, into silence. Each lasts 40 s and plays once through to its true end, never
 round again; until the score is kept, the older themes of 32 s. It streams on the music's bus at the
-stems' level, so the radio's voice pulls it 8 dB down as it does the run's music, and takes one
+stems' level, so the radio's voice pulls it 12 dB down as it does the run's music, and takes one
 voice of the budget while it plays. It goes with its card — the crew on to another run, back to the
 lobby or out — fading over 1 s and holding the bus until then, so the lobby's theme comes in only
 after it. The sting waits for the bus as well: the run's music has faded by the time the card comes.

@@ -65,6 +65,10 @@ const tension = (over: Partial<Tension> = {}): Tension => ({
   alarms: 0,
   escaping: false,
   ending: null,
+  emergency: false,
+  stationClock: null,
+  droneTiles: Infinity,
+  progress: 0,
   ...over,
 });
 

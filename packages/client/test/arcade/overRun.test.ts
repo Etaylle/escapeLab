@@ -73,11 +73,12 @@ describe('the run’s sounds over the machine', () => {
     duck(mix, 'voice', 12, 14, 11.5);
     duck(mix, 'alarm', 20, 21, 19.5);
     const ramps = machine.gain.ramps().map(([level]) => Number(level.toFixed(4)));
-    expect(ramps).toContain(Number((10 ** (-10 / 20)).toFixed(4)));
+    // Under a radio line the machine goes 12 dB down, as the music does since M-tension.
+    expect(ramps).toContain(Number((10 ** (-12 / 20)).toFixed(4)));
     expect(ramps).toContain(Number((10 ** (-8 / 20)).toFixed(4)));
     // The radio's bus and the effects' (the klaxon's) are set by nothing the machine does.
     expect((mix.voice.gain as unknown as FakeGain['gain']).events.length).toBe(voiceBefore);
     expect((mix.sfx.gain as unknown as FakeGain['gain']).events.length).toBe(sfxBefore);
-    expect(MACHINE_DB).toEqual({ voice: -10, alarm: -8, siren: -8 });
+    expect(MACHINE_DB).toEqual({ voice: -12, alarm: -8, siren: -8 });
   });
 });

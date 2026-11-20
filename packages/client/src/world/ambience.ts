@@ -219,14 +219,15 @@ export interface BedLayer {
 
 /**
  * What each kind of room runs on the lab's power, as a seamless loop: fans and hums, at a level
- * of its own, so that a server room roars and an archive hushes.
+ * of its own, so that a server room roars and an archive hushes. The reactor's sits a dB under
+ * the other machine rooms: in its own hall the core's unpowered rumble plays beneath it.
  */
 export const POWERED: Readonly<Partial<Record<BedKind, BedLayer>>> = {
   server: { sample: 'bed-server', db: 3 },
   archive: { sample: 'bed-archive', db: -8 },
   corridor: { sample: 'bed-corridor', db: -2 },
   lab: { sample: 'bed-lab', db: -3 },
-  reactor: { sample: 'bed-reactor', db: 0 },
+  reactor: { sample: 'bed-reactor', db: -4 },
   control: { sample: 'bed-control', db: -3 },
   plain: { sample: 'bed-plain', db: -3 },
 };
