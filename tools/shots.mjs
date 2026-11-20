@@ -19341,13 +19341,17 @@ async function guestJoins(code) {
 }
 
 /**
- * The break-room machine (arcade/), opened from the main menu's „Arcade" on the host's laptop:
- * its own menu over its attract screen (menu-arcade.png), a game started and played on the keys
- * a moment (arcade-play.png, the field as the page), then Esc pauses it and Esc again closes the
- * machine, the menu back under it.
+ * The break-room machine (arcade/), opened from the main menu's „Arcade" on the host's laptop: its
+ * select with both games (arcade-select.png); Ferret vs Ducks, its own menu (menu-arcade.png) and
+ * a game played on the keys a moment (arcade-play.png, the field as the page), left by Esc back to
+ * the select; then Ferret Flush (`captureArcadeFlush`), and Esc out of the machine.
  */
 async function captureArcadeMenu(page) {
   await page.locator('.menu-item[data-item="arcade"]').click();
+  await page.locator('.arcade-select .arcade-game-card').nth(1).waitFor({ timeout: 10_000 });
+  await sleep(800);
+  await capture(page, 'arcade-select.png');
+  await chooseGame(page, 1);
   await page.locator('.arcade .arcade-menu').waitFor({ timeout: 10_000 });
   await sleep(500);
   await capture(page, 'menu-arcade.png');
@@ -19360,28 +19364,85 @@ async function captureArcadeMenu(page) {
   const field = await page.locator('.arcade-field').boundingBox();
   const view = page.viewportSize();
   await capture(page, 'arcade-play.png');
-  await arcadeLeave(page, 'arcade-play.png');
+  await toSelect(page, 'arcade-play.png');
   const share = field === null || view === null ? 0 : field.height / view.height;
   console.log(`arcade-play.png    the field ${Math.round(share * 100)} % of the window's height`);
   if (share < 0.9) fail(`arcade-play.png: the field takes ${Math.round(share * 100)} % of the height, not the page`);
+  await captureArcadeFlush(page);
+  await leaveMachine(page, 'arcade-flush.png');
 }
 
-/** Esc pauses the machine's game, Esc again closes the machine; fails where it stays open. */
-async function arcadeLeave(page, label) {
+/** On the machine's select, game `n` (1, 2) by its key and Enter. */
+async function chooseGame(page, n) {
+  await page.locator('.arcade-select').waitFor({ timeout: 10_000 });
+  await page.keyboard.press(`Digit${n}`);
+  await page.keyboard.press('Enter');
+}
+
+/** Ferret vs Ducks: Esc pauses its game, Esc again leads back to the select. */
+async function toSelect(page, label) {
   await page.keyboard.press('Escape');
   await page.locator('.arcade-card').waitFor({ timeout: 3000 });
+  await page.keyboard.press('Escape');
+  if (!(await untilAsync(async () => (await page.locator('.arcade-select').count()) === 1, 3000))) {
+    fail(`${label}: Esc did not lead back to the select`);
+  }
+}
+
+/** On the select, Esc closes the machine; fails where it stays open. */
+async function leaveMachine(page, label) {
+  await page.locator('.arcade-select').waitFor({ timeout: 3000 });
   await page.keyboard.press('Escape');
   if (!(await untilAsync(async () => (await page.locator('.arcade').count()) === 0, 3000))) {
     fail(`${label}: the machine did not close on Esc`);
   }
 }
 
+/** Esc out of a game of Ferret vs Ducks and out of the machine. */
+async function arcadeLeave(page, label) {
+  await toSelect(page, label);
+  await leaveMachine(page, label);
+}
+
 /**
- * The machine on the guest's phone held upright, by touch: opened from the menu, a game on the
- * touch buttons, the fire held a moment (arcade-phone.png), and closed again.
+ * Ferret Flush on the laptop: chosen on the select, „Eine Ente" by its key, the ferret's flush
+ * waited for, a few clicks on the field and the sight over it (arcade-flush.png): the cursor the
+ * game's own, the page neither scrolled nor selected; „Zurück" leads back to the select.
+ */
+async function captureArcadeFlush(page) {
+  await chooseGame(page, 2);
+  const field = page.locator('.flush .flush-field');
+  await field.waitFor({ timeout: 10_000 });
+  await page.keyboard.press('Digit1');
+  await sleep(5500);
+  const box = await field.boundingBox();
+  if (box === null) throw new Error('arcade-flush.png: no field');
+  for (const share of [0.3, 0.5, 0.7]) {
+    await page.mouse.click(box.x + box.width * share, box.y + box.height * 0.35);
+    await sleep(150);
+  }
+  await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.3);
+  await sleep(300);
+  const shown = await page.evaluate(() => ({
+    cursor: globalThis.getComputedStyle(document.querySelector('.flush-field')).cursor,
+    scrolled: document.scrollingElement.scrollTop,
+    selected: String(globalThis.getSelection()).length,
+  }));
+  await capture(page, 'arcade-flush.png');
+  console.log(`arcade-flush.png   cursor ${shown.cursor}, scrolled ${shown.scrolled}, ${shown.selected} characters selected`);
+  if (shown.cursor !== 'none' || shown.scrolled !== 0 || shown.selected !== 0) {
+    fail('arcade-flush.png: the sight is not the game\'s alone');
+  }
+  await page.locator('.flush-buttons button', { hasText: 'Zurück' }).click();
+}
+
+/**
+ * The machine on the guest's phone held upright, by touch: opened from the menu, Ferret vs Ducks
+ * on the touch buttons, the fire held a moment (arcade-phone.png), and closed again.
  */
 async function captureArcadePhone(guest) {
   await guest.locator('.menu-item[data-item="arcade"]').click();
+  await guest.locator('.arcade-select .arcade-game-card').first().click({ timeout: 10_000 });
   await guest.locator('.arcade .arcade-menu').waitFor({ timeout: 10_000 });
   await guest.locator('.arcade-segments button', { hasText: 'Touch' }).click();
   await guest.locator('.arcade .arcade-primary').click();
@@ -19399,18 +19460,43 @@ async function captureArcadePhone(guest) {
 }
 
 /**
- * Ben, ready in the lobby, plays the machine while the crew gathers (lobby-arcade.png); the run
- * started by the host then closes it on his page with the plant's line (`arcadeClosedByStart`).
+ * Ben, ready in the lobby, plays the machine while the crew gathers: Ferret vs Ducks
+ * (lobby-arcade.png), then back on the select Ferret Flush, his taps shooting on the field and
+ * reaching nothing of the lobby — no line sent, still ready (arcade-flush-phone.png). The run
+ * started by the host then closes it from inside Ferret Flush (`arcadeClosedByStart`).
  */
 async function arcadeInLobby(ben) {
   if (ben.seen.view?.you?.ready !== true) {
     await clickText(ben.page, 'Ich bin bereit');
   }
   await ben.page.locator('.lobby-foot .arcade-open').click();
+  await chooseGame(ben.page, 1);
   // His game from the menu waits paused: its card's first way plays on.
   await ben.page.locator('.arcade .arcade-primary').click({ timeout: 10_000 });
   await sleep(1500);
   await capture(ben.page, 'lobby-arcade.png');
+  await toSelect(ben.page, 'lobby-arcade.png');
+  await ben.page.locator('.arcade-select .arcade-game-card').nth(1).click();
+  await ben.page.locator('.flush-games button').first().click({ timeout: 10_000 });
+  await sleep(5500);
+  await arcadeFlushTaps(ben);
+}
+
+/** Ben's taps on Ferret Flush's field shoot there and reach nothing of the lobby under it. */
+async function arcadeFlushTaps(ben) {
+  const sent = ben.seen.sent.length;
+  const box = await ben.page.locator('.flush .flush-field').boundingBox();
+  if (box === null) throw new Error('arcade-flush-phone.png: no field');
+  for (const share of [0.25, 0.5, 0.75, 0.5]) {
+    await ben.page.touchscreen.tap(box.x + box.width * share, box.y + box.height * 0.4);
+    await sleep(200);
+  }
+  await capture(ben.page, 'arcade-flush-phone.png');
+  const shots = await ben.page.evaluate(() => document.querySelector('.flush') !== null);
+  const ready = ben.seen.view?.you?.ready === true;
+  const lines = ben.seen.sent.length - sent;
+  console.log(`arcade-flush-phone.png four taps on the field: ${lines} line(s) sent, Ben ${ready ? 'still ready' : 'not ready'}`);
+  if (!shots || lines !== 0 || !ready) fail('arcade-flush-phone.png: a tap on the machine reached the lobby');
 }
 
 /** The run came up: the machine on Ben's page is closed, and the plant said why. */
@@ -19430,6 +19516,7 @@ async function arcadeClosedByStart(ben) {
  */
 async function arcadeWhileAway(anna) {
   await anna.page.locator('.away-offer .arcade-open').click();
+  await chooseGame(anna.page, 1);
   await anna.page.locator('.arcade .arcade-primary').click({ timeout: 10_000 });
   const at = { ...anna.seen.pos };
   const sent = anna.seen.sent.length;
